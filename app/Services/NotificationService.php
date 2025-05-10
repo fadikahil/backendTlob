@@ -80,6 +80,9 @@ class NotificationService {
                         "title" => $title,
                         "body"  => $message
                     ];
+                    $data['message']['android'] = [
+                        "priority" => "high",
+                    ];
                 }
 
                 $encodedData = json_encode($data);
