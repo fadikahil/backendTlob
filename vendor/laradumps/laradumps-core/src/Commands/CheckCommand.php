@@ -1,0 +1,386 @@
+<?php
+
+namespace LaraDumps\LaraDumpsCore\Commands;
+
+use Exception;
+use LaraDumps\LaraDumpsCore\Actions\GitDirtyFiles;
+use Symfony\Component\Console\Attribute\AsCommand;
+use Symfony\Component\Console\Command\Command;
+use Symfony\Component\Console\Helper\ProgressBar;
+use Symfony\Component\Console\Input\{InputArgument, InputInterface};
+use Symfony\Component\Console\Output\OutputInterface;
+
+use Symfony\Component\Finder\Finder;
+
+use function Termwind\{render, renderUsing};
+
+#[AsCommand(
+    name: 'check',
+    description: 'Check if you forgot any ds() in your files',
+    hidden: false
+)]
+class CheckCommand extends Command
+{
+    private string $defaultTextToSearch = 'ds,dsq,dsd,ds1,ds2,ds3,ds4,ds5';
+
+    private string $defaultTextToIgnore = '@dsAutoClearOnPageReload';
+
+    protected function configure(): void
+    {
+        $this
+            ->addOption('dirty', null, InputArgument::OPTIONAL, 'Search only files that are dirty in git')
+            ->addOption('dir', null, InputArgument::OPTIONAL, 'Directories that will be filtered separated by comma')
+            ->addOption('ignore', null, InputArgument::OPTIONAL, 'Directories to be ignored separated by comma')
+            ->addOption('text', null, InputArgument::OPTIONAL, 'Texts that will be searched separated by a comma')
+            ->addOption('ignore-files', null, InputArgument::OPTIONAL, 'Files that will be ignored separated by a comma')
+            ->addArgument('stop-on-failure', InputArgument::OPTIONAL, 'Stop the search if a match is found')
+            ->addOption('exactly', null, InputArgument::OPTIONAL, 'Search for exact occurrences');
+    }
+
+    /**
+     * @throws Exception
+     */
+    protected function execute(InputInterface $input, OutputInterface $output): int
+    {
+        $startTime = microtime(true);
+
+        renderUsing($output);
+
+        $output->writeln('');
+
+        if (empty($input->getOption('dir'))) {
+            $output->writeln(' 👋️ <error>Whoops. Specify the folders you need to search in --dir option in the comma separated</error>');
+            $output->writeln('');
+
+            return Command::FAILURE;
+        }
+
+        $output->writeln(' 🔍 <info>LaraDumps is searching for words used in debugging in: ' . $input->getOption('dir') . '</info>');
+
+        $dirtyFiles = [];
+
+        if (!empty($input->getOption('dirty'))) {
+            $dirtyFiles = GitDirtyFiles::run();
+
+            if (empty($dirtyFiles)) {
+                $this->displaySuccess('0');
+
+                return Command::SUCCESS;
+            }
+        }
+
+        $matches = [];
+
+        $finder = (new Finder())->files()
+            ->ignoreVCS(true)
+            ->exclude('node_modules')
+            ->name('*.php')
+            ->in($this->prepareDirectories($input));
+
+        $progressBar = new ProgressBar($output, count($dirtyFiles) ?: $finder->count());
+
+        $output->writeln('');
+
+        foreach ($finder as $file) {
+            if ($dirtyFiles && !in_array($file->getRealPath(), $dirtyFiles)) {
+                continue;
+            }
+
+            if (in_array($file->getRealPath(), $this->prepareFilesToIgnore($input))) {
+                continue;
+            }
+
+            $progressBar->advance();
+
+            /** @var string[] $contents */
+            $contents = file($file->getRealPath());
+
+            foreach ($contents as $line => $lineContent) {
+                $contains = false;
+                $ignore   = false;
+
+                foreach ($this->prepareTextToIgnore($input) as $text) {
+                    if (strpos(strtolower($lineContent), strtolower($text))) {
+                        $ignore = true;
+
+                        break;
+                    }
+                }
+
+                foreach ($this->prepareTextToSearch($input) as $search) {
+                    $search = ' ' . ltrim($search);
+
+                    if (strpos($lineContent, $search)) {
+                        $contains = true;
+
+                        break;
+                    }
+                }
+
+                if ($input->getOption('exactly')) {
+                    foreach ($this->prepareCustomTextToSearch($input) as $search) {
+                        if (strpos($lineContent, ltrim($search))) {
+                            $contains = true;
+
+                            break;
+                        }
+                    }
+                }
+
+                if ($contains && !$ignore) {
+                    $matches[] = $this->addMatchToDisplay($file, $lineContent, $line);
+
+                    if ($input->getArgument('stop-on-failure')) {
+                        break 2;
+                    }
+                }
+            }
+        }
+
+        $output->writeln('');
+
+        foreach ($matches as $iterator => $content) {
+            $this->displayCodeBlock($output, $iterator, $content);
+        }
+
+        $progressBar->finish();
+
+        $duration = $this->getDuration($startTime);
+
+        if (($total = count($matches)) > 0) {
+            $this->displayErrorFound($total, $matches, $duration);
+
+            return Command::FAILURE;
+        }
+
+        $this->displaySuccess($duration);
+
+        return Command::SUCCESS;
+    }
+
+    private function getDuration(float $startTime): string
+    {
+        $duration = ((microtime(true) - $startTime) * 1000);
+
+        if ($duration > 60000) {
+            $mins     = floor($duration / 60000);
+            $secs     = round((fmod($duration, 60000) / 1000), 2);
+            $duration = $mins . ' mins';
+
+            if ($secs !== 0) {
+                $duration .= ", $secs secs";
+            }
+
+            return $duration;
+        }
+
+        if ($duration > 1000) {
+            return round(($duration / 1000), 2) . ' secs';
+        }
+
+        return round($duration) . 'ms';
+    }
+
+    private function prepareDirectories(InputInterface $input): array
+    {
+        $array = [];
+
+        foreach (explode(',', $input->getOption('dir') ?? '') as $dir) {
+            if (!empty($dir)) {
+                $array[] = appBasePath() . trim($dir);
+            }
+        }
+
+        return $array;
+    }
+
+    private function prepareFilesToIgnore(InputInterface $input): array
+    {
+        $array = [];
+
+        foreach (explode(',', $input->getOption('ignore-files') ?? '') as $dir) {
+            if (!empty($dir)) {
+                $array[] = appBasePath() . trim($dir);
+            }
+        }
+
+        return $array;
+    }
+
+    private function prepareTextToSearch(InputInterface $input): array
+    {
+        $textToSearch = [];
+
+        $checkInFor = $input->getOption('text') ?? '';
+
+        $values = explode(',', $checkInFor);
+
+        $mergedValues = array_unique(
+            array_merge(
+                explode(
+                    ',',
+                    $this->defaultTextToSearch
+                ),
+                $values
+            )
+        );
+
+        foreach ($mergedValues as $search) {
+            $search = trim($search);
+
+            if (strlen($search) > 0) {
+                $textToSearch[] = ' ' . $search;
+                $textToSearch[] = $search;
+                $textToSearch[] = '//' . $search;
+                $textToSearch[] = '->' . $search;
+                $textToSearch[] = $search . '(';
+                $textToSearch[] = '@' . $search;
+                $textToSearch[] = ' @' . $search;
+            }
+        }
+
+        return $textToSearch;
+    }
+
+    private function prepareCustomTextToSearch(InputInterface $input): array
+    {
+        $textToSearch = [];
+
+        $checkInFor = explode(',', $input->getOption('text') ?? '');
+
+        foreach ($checkInFor as $search) {
+            $search = trim($search);
+
+            if (strlen($search) > 0) {
+                $textToSearch[] = ' ' . $search;
+                $textToSearch[] = $search;
+                $textToSearch[] = '//' . $search;
+                $textToSearch[] = '->' . $search;
+                $textToSearch[] = $search . '(';
+                $textToSearch[] = '@' . $search;
+                $textToSearch[] = ' @' . $search;
+            }
+        }
+
+        return $textToSearch;
+    }
+
+    private function prepareTextToIgnore(InputInterface $input): array
+    {
+        $array = [];
+
+        $ignore = $input->getOption('ignore') ?? '';
+
+        $values = explode(',', $ignore);
+
+        $mergedValues = array_unique(array_merge(explode(',', $this->defaultTextToIgnore), $values));
+
+        foreach ($mergedValues as $search) {
+            if (!empty($search)) {
+                $array[] = $search;
+            }
+        }
+
+        return $array;
+    }
+
+    private function addMatchToDisplay(\SplFileInfo $file, string $lineContent, int $line): array
+    {
+        /** @var array $fileContents */
+        $fileContents = file($file->getRealPath());
+
+        $partialContent = $fileContents[$line - 2] ?? '';
+        $partialContent .= $fileContents[$line - 1] ?? '';
+
+        $partialContent .= $lineContent;
+        $partialContent .= $fileContents[$line + 1] ?? '';
+
+        $realPath = isset($_ENV['IGNITION_LOCAL_SITES_PATH'])
+            ? $_ENV['IGNITION_LOCAL_SITES_PATH'] . DIRECTORY_SEPARATOR . str_replace(appBasePath(), '', $file->getRealPath())
+            : $file->getRealPath();
+
+        return [
+            'line'     => $line + 1,
+            'file'     => $file->getRealPath(),
+            'realPath' => 'file:///' . $realPath,
+            'content'  => $partialContent,
+        ];
+    }
+
+    private function displayCodeBlock(OutputInterface $output, int $iterator, array $content): void
+    {
+        $output->writeln('');
+
+        $output->writeln(
+            ' ' . ($iterator + 1)
+            . ' <href=' . $content['realPath'] . '>'
+            . $content['realPath']
+            . ':'
+            . $content['line']
+            . '</>'
+        );
+
+        $line      = $content['line'];
+        $startLine = $line - 2;
+        $content   = $content['content'];
+
+        render(<<<HTML
+            <div class="space-x-1 mx-2 mb-1">
+                <code line="$line" start-line="$startLine">
+                $content
+                </code>
+            </div>
+            HTML);
+    }
+
+    private function displaySuccess(string $duration): void
+    {
+        render(
+            <<<HTML
+<div>
+    <div class="flex">
+        <span class="flex-1 content-repeat-[-] text-gray"></span>
+    </div>
+    <div>
+        <div class="text-green ml-2">
+          ✅  <span class="mx-1"><span class="font-bold">SUCCESS</span> - No results found</span>
+        </div>
+        <div class=" ml-2 mt-0.5">
+           🕗 Duration: $duration
+        </div>
+    </div>
+    <div></div>
+</div>
+HTML
+        );
+    }
+
+    private function displayErrorFound(int $total, array $matches, string $duration): void
+    {
+        $totalFiles = count(array_unique(array_column($matches, 'realPath')));
+
+        $totalErrorMessage = ($total === 1) ? 'error' : 'errors';
+        $totalFileMessage  = ($totalFiles === 1) ? 'file' : 'files';
+
+        $message = 'Found ' . $total . ' ' . $totalErrorMessage . ' / ' . $totalFiles . ' ' . $totalFileMessage;
+
+        render(
+            <<<HTML
+<div>
+    <div class="flex">
+        <span class="flex-1 content-repeat-[-] text-gray"></span>
+    </div>
+    <div>
+        <div class="text-red ml-2">
+          ❌  <span class="mx-1"><span class="font-bold">ERROR</span> - $message</span>
+        </div>
+        <div class=" ml-2 mt-0.5">
+           🕗 Duration: $duration
+        </div>
+    </div>
+    <div></div>
+</div>
+HTML
+        );
+    }
+}

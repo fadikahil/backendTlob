@@ -1,0 +1,34 @@
+observers:
+  dump: false
+  original_dump: true
+  auto_invoke_app: false
+  enabled_in_testing: false
+  queries: false
+  slow_queries: false
+  mail: false
+  logs: true
+  http: false
+  jobs: false
+  commands: false
+  scheduled_commands: false
+  gate: false
+  cache: false
+logs:
+  info: true
+  warning: false
+  emergency: true
+  alert: false
+  debug: true
+  error: true
+  critical: true
+  notice: true
+  vendor: false
+  deprecated_message: false
+slow_queries:
+  threshold_in_ms: 500
+queries:
+  only_duplicated: false
+  select: true
+  insert: true
+  update: true
+  delete: true

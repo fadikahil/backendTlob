@@ -1,0 +1,14 @@
+DS_APP_HOST=127.0.0.1
+#DS_SEND_QUERIES=true #changing this crashes the tests
+DS_SEND_HTTP_CLIENT_REQUESTS=true
+DS_SEND_JOBS=true
+DS_SEND_COMMANDS=true
+DS_SEND_LOGS=true
+DS_AUTO_CLEAR_ON_PAGE_RELOAD=false
+DS_AUTO_INVOKE_APP=true
+# ******* File Handler *******
+DS_FILE_HANDLER="phpstorm://open?file={filepath}&line={line}"
+DS_PROJECT_PATH="/Users/jamesbond/bomb-disarmer"
+# ******* Hide Routes *******
+DS_IGNORE_ROUTES="debugbar,ignition,horizon,livewire"
+DS_SOME_KEY=

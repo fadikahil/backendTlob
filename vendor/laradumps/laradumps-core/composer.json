@@ -1,0 +1,65 @@
+{
+    "name": "laradumps/laradumps-core",
+    "description": "LaraDumps is a friendly app designed to boost your Laravel / PHP coding and debugging experience.",
+    "homepage": "https://github.com/laradumps/laradumps-core",
+    "license": "MIT",
+    "minimum-stability": "dev",
+    "prefer-stable": true,
+    "authors": [
+        {
+            "name": "Luan Freitas",
+            "email": "luanfreitas10@protonmail.com",
+            "role": "Developer"
+        }
+    ],
+    "require": {
+        "php": "^8.1",
+        "ext-curl": "*",
+        "ramsey/uuid": "^4.7.5",
+        "symfony/var-dumper": "^5.4|^6.4|^7.0",
+        "symfony/console": "^5.4|^6.4|^7.0",
+        "symfony/process": "^5.4|^6.4|^7.0",
+        "symfony/finder": "^5.4|^6.4|^7.0",
+        "symfony/yaml": "^5.4|^6.4|^7.0",
+        "nunomaduro/termwind": "^1.15|^2.0",
+        "spatie/backtrace": "^1.5"
+    },
+    "require-dev": {
+        "laravel/pint": "^1.13.7",
+        "pestphp/pest": "^2.0|^3.0",
+        "phpstan/phpstan": "^1.10.50",
+        "illuminate/support": "^10.46"
+    },
+    "autoload": {
+        "psr-4": {
+            "LaraDumps\\LaraDumpsCore\\": "src/"
+        },
+        "files": [
+            "src/functions.php"
+        ]
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "LaraDumps\\LaraDumpsCore\\Tests\\" : "tests"
+        }
+    },
+    "scripts": {
+        "fix": "./vendor/bin/pint",
+        "lint": "./vendor/bin/pint --test",
+        "phpstan": "./vendor/bin/phpstan analyse --ansi --memory-limit=-1",
+        "test": "./vendor/bin/pest --order-by random",
+        "verify": [
+            "@lint",
+            "@phpstan",
+            "@test"
+        ]
+    },
+    "bin": [
+        "bin/laradumps"
+    ],
+    "config": {
+        "allow-plugins": {
+            "pestphp/pest-plugin": true
+        }
+    }
+}

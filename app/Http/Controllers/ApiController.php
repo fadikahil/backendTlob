@@ -197,6 +197,7 @@ class ApiController extends Controller
                 'categories'    => 'nullable|string',
                 'phone'         => 'nullable|string',
                 'country_code'  => 'nullable|string',
+                'fcm_token'     => 'nullable|string',
             ]);
 
             if ($validator->fails()) {
@@ -250,6 +251,16 @@ class ApiController extends Controller
 
             // Generate Token
             $token = $user->createToken('auth_token')->plainTextToken;
+
+            if(isset($request->fcm_token) && !empty($request->fcm_token)) {
+                UserFcmToken::updateOrCreate(
+                    ['user_id' => $user->id],
+                    [
+                        'fcm_token' => $request->fcm_token,
+                        'user_id' => $user->id,
+                    ]
+                );
+            }
 
             DB::commit();
 
