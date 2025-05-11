@@ -197,7 +197,7 @@ class ApiController extends Controller
                 'categories'    => 'nullable|string',
                 'phone'         => 'nullable|string',
                 'country_code'  => 'nullable|string',
-                'fcm_token'     => 'nullable|string',
+                'fcm_token'     => 'required|string',
             ]);
 
             if ($validator->fails()) {
@@ -252,17 +252,31 @@ class ApiController extends Controller
             // Generate Token
             $token = $user->createToken('auth_token')->plainTextToken;
 
-            if(isset($request->fcm_token) && !empty($request->fcm_token)) {
-                UserFcmToken::updateOrCreate(
-                    ['user_id' => $user->id],
-                    [
-                        'fcm_token' => $request->fcm_token,
-                        'user_id' => $user->id,
-                    ]
-                );
-            }
 
             DB::commit();
+
+            if(isset($request->fcm_token) && !empty($request->fcm_token)) {
+
+                try {
+                    DB::beginTransaction();
+                    ds($request->fcm_token);
+                    ds($user->id);
+                    $user_fcm_token = UserFcmToken::updateOrCreate(
+                        ['user_id' => $user->id],
+                        [
+                            'fcm_token' => $request->fcm_token,
+                            'user_id' => $user->id,
+                        ]
+                    );
+                    ds($user_fcm_token);
+                    DB::commit();
+                }catch (Throwable $th) {
+                    DB::rollBack();
+                    ds($th);
+//                    ResponseService::logErrorResponse($th, "API Controller -> Signup");
+//                    return ResponseService::errorResponse();
+                }
+            }
 
             // Get the user's role
             $user->getRoleNames()->first();
