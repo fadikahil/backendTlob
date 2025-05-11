@@ -6,6 +6,7 @@ use App\Models\Setting;
 use App\Models\UserFcmToken;
 use Google\Client;
 use Google\Exception;
+use Illuminate\Support\Facades\Log;
 use RuntimeException;
 use Throwable;
 
@@ -132,6 +133,8 @@ class NotificationService {
             }
             $file_name = $file_name->value;
             $file_path = base_path('public/storage/' . $file_name);
+
+            Log::info($file_path);
 
             if (!file_exists($file_path)) {
                 return [
