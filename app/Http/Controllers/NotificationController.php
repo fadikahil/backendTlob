@@ -75,12 +75,13 @@ class NotificationController extends Controller {
 
                 if (!$notification['error']) {
                     ResponseService::warningResponse($notification['message'],['test'=>$notification]);
+                }else {
+                    ResponseService::errorResponse($notification);
                 }
             }
             ResponseService::successResponse('Message Send Successfully', $notification);
 
         } catch (Throwable $th) {
-            dd($th);
             ResponseService::logErrorResponse($th, 'NotificationController -> store');
             ResponseService::errorResponse('Something Went Wrong');
         }
