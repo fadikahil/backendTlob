@@ -132,7 +132,7 @@ class NotificationService {
                 ];
             }
             $file_name = $file_name->value;
-            $file_path = base_path('storage/app/public/settings/' . $file_name);
+            $file_path = base_path('storage/app/public/' . $file_name);
 
             Log::info($file_path);
 
