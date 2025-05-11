@@ -76,7 +76,7 @@ class NotificationController extends Controller {
                 if (!$notification['error']) {
                     ResponseService::warningResponse($notification['message'],['test'=>$notification]);
                 }else {
-                    ResponseService::errorResponse($notification);
+                    ResponseService::errorResponse($notification['message']);
                 }
             }
             ResponseService::successResponse('Message Send Successfully', $notification);
