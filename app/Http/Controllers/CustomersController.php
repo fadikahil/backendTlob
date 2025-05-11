@@ -88,9 +88,9 @@ class CustomersController extends Controller {
         
         // Get the user role from the request, default to 'Client' if not specified
         $role = $request->role ?? 'Client';
-        
+
         if ($request->notification_list) {
-            $sql = User::role($role)->orderBy($sort, $order)->has('fcm_tokens')->where('notification', 1);
+            $sql = User::orderBy($sort, $order)->has('fcm_tokens')->where('notification', 1);
         } else {
             $sql = User::role($role);
         }
@@ -98,6 +98,7 @@ class CustomersController extends Controller {
         if (!empty($request->search)) {
             $sql = $sql->search($request->search);
         }
+
         
         // Include user_purchased_packages relationship for all roles
         $sql = $sql->with(['user_purchased_packages.package']);
@@ -110,6 +111,7 @@ class CustomersController extends Controller {
         $rows = array();
         $no = 1;
         foreach ($result as $row) {
+            ds($row);
             $tempRow = $row->toArray();
             $tempRow['no'] = $no++;
             
