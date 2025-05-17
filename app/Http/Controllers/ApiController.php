@@ -226,6 +226,7 @@ class ApiController extends Controller
                 'categories'    => $request->categories,
                 'phone'         => $request->phone,
                 'platform_type' => $request->platform_type,
+                'country_code'  => $request->country_code,
                 'type'          => $request->providerType, // Set type to 'email' by default
                 'profile'       => $request->hasFile('profile')
                     ? $request->file('profile')->store('user_profile', 'public')
@@ -300,7 +301,6 @@ class ApiController extends Controller
                 'fullName'              => 'nullable|string',
                 'profile'               => 'nullable|mimes:jpg,jpeg,png|max:6144',
                 'email'                 => 'nullable|email|unique:users,email,' . Auth::user()->id,
-                'mobile'                => 'nullable|unique:users,mobile,' . Auth::user()->id,
                 'fcm_id'                => 'nullable',
                 'address'               => 'nullable',
                 'show_personal_details' => 'boolean',
