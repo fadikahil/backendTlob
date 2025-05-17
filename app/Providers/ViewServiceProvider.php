@@ -3,9 +3,11 @@
 namespace App\Providers;
 
 use App\Services\CachingService;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Session;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
+use Stripe\File;
 
 class ViewServiceProvider extends ServiceProvider {
     /**
@@ -28,7 +30,7 @@ class ViewServiceProvider extends ServiceProvider {
 
         View::composer('layouts.sidebar', static function (\Illuminate\View\View $view) {
             $settings = CachingService::getSystemSettings('company_logo');
-            $view->with('company_logo', $settings ?? '');
+            $view->with('company_logo', self::to_path($settings) ?? '');
         });
 
         View::composer('layouts.main', static function (\Illuminate\View\View $view) {
@@ -41,6 +43,9 @@ class ViewServiceProvider extends ServiceProvider {
             $favicon_icon = CachingService::getSystemSettings('favicon_icon');
             $company_logo = CachingService::getSystemSettings('company_logo');
             $login_image = CachingService::getSystemSettings('login_image');
+            Log::info($login_image);
+            Log::info($company_logo);
+            Log::info($favicon_icon);
             $view->with('company_logo', $company_logo ?? '');
             $view->with('favicon', $favicon_icon ?? '');
             $view->with('login_bg_image', $login_image ?? '');
