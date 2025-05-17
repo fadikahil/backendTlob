@@ -70,26 +70,26 @@ class ApiController extends Controller
     public function __construct()
     {
         $this->uploadFolder = 'item_images';
-        
+
         // Apply auth:sanctum and auth.status middleware to all methods except specific ones
         $this->middleware(['auth:sanctum', 'auth.status'])->except([
-            'login', 
-            'userSignup', 
+            'login',
+            'userSignup',
             'getSystemSettings',
             'getLanguages',
             'getPackage',
             'setItemTotalClick',
             'appPaymentStatus',
-            'getCustomFields', 
+            'getCustomFields',
             'getItem',
             'getUsers',
-            'getSlider', 
+            'getSlider',
             'getReportReasons',
             'getSubCategories',
             'getParentCategoryTree',
             'getFeaturedSection',
             'getBlog',
-            'getAllBlogTags', 
+            'getAllBlogTags',
             'getFaqs',
             'getTips',
             'getCountries',
@@ -191,7 +191,9 @@ class ApiController extends Controller
                 'platform_type' => 'nullable|in:android,ios',
                 'fullName'      => 'nullable|string',
                 'gender'        => 'nullable|in:Male,Female,Other',
-                'location'      => 'nullable|string',
+                'country'       => 'nullable|string',
+                'city'          => 'nullable|string',
+                'state'         => 'nullable|string',
                 'userType'      => 'nullable|in:Provider,Client',
                 'providerType'  => 'nullable|in:Expert,Business',
                 'categories'    => 'nullable|string',
@@ -218,7 +220,8 @@ class ApiController extends Controller
                 'password'      => bcrypt($request->password),
                 'name'          => $request->fullName,
                 'gender'        => $request->gender,
-                'location'      => $request->location,
+                'country'       => $request->country,
+                'state'         => $request->state,
                 'city'          => $request->city,
                 'categories'    => $request->categories,
                 'phone'         => $request->phone,
@@ -259,8 +262,6 @@ class ApiController extends Controller
 
                 try {
                     DB::beginTransaction();
-                    ds($request->fcm_token);
-                    ds($user->id);
                     $user_fcm_token = UserFcmToken::updateOrCreate(
                         ['user_id' => $user->id],
                         [
@@ -268,11 +269,9 @@ class ApiController extends Controller
                             'user_id' => $user->id,
                         ]
                     );
-                    ds($user_fcm_token);
                     DB::commit();
                 }catch (Throwable $th) {
                     DB::rollBack();
-                    ds($th);
 //                    ResponseService::logErrorResponse($th, "API Controller -> Signup");
 //                    return ResponseService::errorResponse();
                 }
@@ -307,14 +306,14 @@ class ApiController extends Controller
                 'show_personal_details' => 'boolean',
                 'country_code'          => 'nullable|string',
                 'gender'                => 'nullable|in:Male,Female,Other',
-                'location'              => 'nullable|string',
                 'country'               => 'nullable|string', // Keep for backward compatibility
+                'state'               => 'nullable|string', // Keep for backward compatibility
+                'city'               => 'nullable|string', // Keep for backward compatibility
                 'userType'              => 'nullable|in:Provider,Client',
                 'providerType'          => 'nullable|in:Expert,Business',
                 'businessName'          => 'nullable|string',
                 'categories'            => 'nullable|string',
                 'phone'                 => 'nullable|string',
-                'city'                  => 'nullable|string',
                 'bio'                   => 'nullable|string',
                 'facebook'              => 'nullable|string',
                 'twitter'               => 'nullable|string',
@@ -335,7 +334,7 @@ class ApiController extends Controller
             if (!empty($request->fullName)) {
                 $data['name'] = $request->fullName;
             }
-            
+
             if (!empty($request->phone)) {
                 $data['mobile'] = $request->phone;
             }
@@ -345,10 +344,17 @@ class ApiController extends Controller
             }
 
             if (isset($request->country)) {
-                $data['location'] = $request->country;
-                unset($data['country']); 
+                $data['country'] = $request->country;
             }
-            
+
+            if(isset($request->state)) {
+                $data['state'] = $request->state;
+            }
+
+            if(isset($request->city)) {
+                $data['city'] = $request->city;
+            }
+
             if ($request->hasFile('profile')) {
                 $originalProfile = DB::table('users')->where('id', $app_user->id)->value('profile');
                 $data['profile'] = FileService::compressAndReplace($request->file('profile'), 'profile', $originalProfile);
@@ -357,7 +363,7 @@ class ApiController extends Controller
             if (!empty($request->fcm_id)) {
                 UserFcmToken::updateOrCreate(['fcm_token' => $request->fcm_id], ['user_id' => $app_user->id, 'created_at' => Carbon::now(), 'updated_at' => Carbon::now()]);
             }
-            
+
             // Set show_personal_details if provided
             if (isset($request->show_personal_details)) {
                 $data['show_personal_details'] = $request->show_personal_details;
@@ -366,7 +372,7 @@ class ApiController extends Controller
             // Handle role changes if userType is provided
             if (!empty($request->userType)) {
                 $user = User::find($app_user->id);
-                
+
                 if ($request->userType === 'Provider') {
                     if ($request->providerType === 'Expert') {
                         $user->syncRoles(['Expert']);
@@ -398,7 +404,7 @@ class ApiController extends Controller
             DB::table('users')->where('id', $app_user->id)->update($data);
 
             $updatedUser = User::find($app_user->id);
-            
+
             $updatedUser->getRoleNames()->first();
 
             ResponseService::successResponse("Profile Updated Successfully", $updatedUser);
@@ -475,7 +481,7 @@ class ApiController extends Controller
                 'start_date'  => Carbon::now(),
                 'total_limit' => $package->item_limit == "unlimited" ? null : $package->item_limit,
                 'end_date'    => $package->duration == "unlimited" ? null : Carbon::now()->addDays($package->duration),
-                'status'      => 0  
+                'status'      => 0
             ]);
             ResponseService::successResponse('Package has been successfully assigned to your account.');
         } catch (Throwable $th) {
@@ -556,13 +562,13 @@ class ApiController extends Controller
 
             DB::beginTransaction();
             $user = Auth::user();
-            
+
             // Determine provider_item_type based on post_type parameter
             $providerItemType = 'service'; // Default value
             if ($request->post_type === 'PostType.experience') {
                 $providerItemType = 'experience';
             }
-            
+
             $user_package = UserPurchasedPackage::onlyActive()->whereHas('package', static function ($q) {
                 $q->where('type', 'item_listing');
             })->where('user_id', $user->id)->first();
@@ -591,7 +597,7 @@ class ApiController extends Controller
             if ($providerItemType === 'experience' && $request->expiration_date) {
                 // For experience type, use the provided expiration date and time
                 $expiryDate = $request->expiration_date;
-                
+
                 // If expiration_time is provided, combine it with the expiration_date
                 if ($request->expiration_time) {
                     $dateTime = new \DateTime($expiryDate);
@@ -607,8 +613,8 @@ class ApiController extends Controller
             // Process special_tags if provided
             $specialTags = null;
             if ($request->special_tags) {
-                $specialTags = is_array($request->special_tags) 
-                    ? json_encode($request->special_tags) 
+                $specialTags = is_array($request->special_tags)
+                    ? json_encode($request->special_tags)
                     : $request->special_tags;
             }
 
@@ -639,7 +645,7 @@ class ApiController extends Controller
                 'expiration_date'      => $request->expiration_date ?? null,
                 'expiration_time'      => $request->expiration_time ?? null,
             ];
-            
+
             if ($request->hasFile('image')) {
                 $data['image'] = FileService::compressAndUpload($request->file('image'), $this->uploadFolder);
             }
@@ -730,17 +736,20 @@ class ApiController extends Controller
             'user_type'         => 'nullable|in:business,expert',
             'provider_item_type' => 'nullable|in:service,experience',
             'sort_by'           => 'nullable|in:new-to-old,old-to-new,price-high-to-low,price-low-to-high,popular_items',
-            'posted_since'      => 'nullable|in:all-time,today,within-1-week,within-2-week,within-1-month,within-3-month'
+            'posted_since'      => 'nullable|in:all-time,today,within-1-week,within-2-week,within-1-month,within-3-month',
         ]);
+
+//        ds($request->all());
 
         if ($validator->fails()) {
             ResponseService::validationError($validator->errors()->first());
         }
         try {
             //TODO : need to simplify this whole module
-            $sql = Item::with('user:id,name,email,mobile,profile,created_at,is_verified,show_personal_details,country_code,gender', 'category:id,name,image', 'gallery_images:id,image,item_id', 'featured_items', 'favourites', 'item_custom_field_values.custom_field', 'area:id,name')
+            $sql = Item::with('user:id,name,email,mobile,profile,created_at,is_verified,show_personal_details,country_code,country,state,city,categories,gender', 'category:id,name,image', 'gallery_images:id,image,item_id', 'featured_items', 'favourites', 'item_custom_field_values.custom_field', 'area:id,name')
                 ->withCount('favourites')
                 ->select('items.*')
+                ->whereHas('user')
                 ->when($request->id, function ($sql) use ($request) {
                     $sql->where('id', $request->id);
                 })->when(($request->category_id), function ($sql) use ($request) {
@@ -749,13 +758,13 @@ class ApiController extends Controller
                         $categoryIds = explode(',', $request->category_id);
                         // Get all categories with their children
                         $allCategoryIds = [];
-                        
+
                         foreach ($categoryIds as $catId) {
                             $category = Category::where('id', $catId)->with('children')->get();
                             $categoryIDS = HelperService::findAllCategoryIds($category);
                             $allCategoryIds = array_merge($allCategoryIds, $categoryIDS);
                         }
-                        
+
                         return $sql->whereIn('category_id', array_unique($allCategoryIds));
                     } else {
                         // Single category ID
@@ -778,24 +787,24 @@ class ApiController extends Controller
                 })->when($request->user_type, function ($sql) use ($request) {
                     // Filter by user type (business or expert)
                     Log::info("Filtering by user_type: " . $request->user_type);
-                    
+
                     // Get the normalized search term
                     $userType = strtolower($request->user_type);
-                    
+
                     return $sql->where(function($query) use ($userType) {
                         $query->whereHas('user', function($userQuery) use ($userType) {
                             Log::info("Checking for user_type in user table: " . $userType);
-                            
+
                             // Check multiple fields that might contain user type information
                             $userQuery->where(function($subquery) use ($userType) {
                                 // Check type field
                                 $subquery->where('type', 'LIKE', "%{$userType}%")
                                          ->orWhere('type', 'LIKE', "%".ucfirst($userType)."%");
-                                
+
                                 // Check provider_type field
                                 $subquery->orWhere('provider_type', 'LIKE', "%{$userType}%")
                                          ->orWhere('provider_type', 'LIKE', "%".ucfirst($userType)."%");
-                                
+
                                 // Check via roles
                                 $subquery->orWhereHas('roles', function($q) use ($userType) {
                                     $q->where(function($roleQuery) use ($userType) {
@@ -830,17 +839,16 @@ class ApiController extends Controller
                     return $sql->where('slug', $request->slug);
                 })->when($request->provider_item_type, function ($sql) use ($request) {
                     return $sql->where('provider_item_type', $request->provider_item_type);
-                })->when($request->rating_from || $request->rating_to, function ($sql) use ($request) {
-                    $ratingFrom = $request->rating_from ?? 0;
-                    $ratingTo = $request->rating_to ?? 5;
-                    
+                })->when($request->min_rating || $request->max_rating, function ($sql) use ($request) {
+                    $min_rating = $request->min_rating ?? 0;
+                    $max_rating = $request->max_rating ?? 5;
                     return $sql->leftJoin('service_reviews', 'items.id', '=', 'service_reviews.service_id')
                         ->select('items.*', DB::raw('AVG(service_reviews.ratings) as average_rating'))
                         ->groupBy('items.id')
-                        ->havingRaw('(average_rating >= ? AND average_rating <= ?) OR average_rating IS NULL', [$ratingFrom, $ratingTo]);
+                        ->havingRaw('(average_rating >= ? AND average_rating <= ?) OR average_rating IS NULL', [$min_rating, $max_rating]);
                 })->when($request->special_tags, function ($sql) use ($request) {
                     $specialTags = $request->special_tags;
-                    
+
                     // Process each special tag
                     foreach ($specialTags as $tagKey => $tagValue) {
                         // For tags with value "true", we want items that have this tag set to true
@@ -848,14 +856,14 @@ class ApiController extends Controller
                             $sql->whereRaw("JSON_EXTRACT(special_tags, '$.".$tagKey."') = 'true'");
                         }
                         // For tags with value "false", we want items that either don't have this tag or have it set to false
-                        elseif ($tagValue === 'false' || $tagValue === false) {
-                            $sql->where(function($query) use ($tagKey) {
-                                $query->whereRaw("JSON_EXTRACT(special_tags, '$.".$tagKey."') = 'false'")
-                                    ->orWhereRaw("JSON_EXTRACT(special_tags, '$.".$tagKey."') IS NULL");
-                            });
-                        }
+//                        elseif ($tagValue === 'false' || $tagValue === false) {
+//                            $sql->where(function($query) use ($tagKey) {
+//                                $query->whereRaw("JSON_EXTRACT(special_tags, '$.".$tagKey."') = 'false'")
+//                                    ->orWhereRaw("JSON_EXTRACT(special_tags, '$.".$tagKey."') IS NULL");
+//                            });
+//                        }
                     }
-                    
+
                     return $sql;
                 })->when($request->latitude && $request->longitude && $request->radius, function ($sql) use ($request) {
                     $latitude = $request->latitude;
@@ -878,7 +886,6 @@ class ApiController extends Controller
                         ->having('distance', '<', $radius)
                         ->orderBy('distance', 'asc');
                 });
-
 
             //            // Other users should only get approved items
             //            if (!Auth::check()) {
@@ -937,7 +944,7 @@ class ApiController extends Controller
 
 
             if (!empty($request->search)) {
-                $sql->search($request->search);
+                $sql->where('name', 'LIKE', "%{$request->search}%");
             }
             function removeBackslashesRecursive($data)
             {
@@ -1229,6 +1236,29 @@ class ApiController extends Controller
         }
     }
 
+    public function getAllCategories(Request $request) {
+        try {
+            $sql = Category::withCount(['subcategories' => function ($q) {
+                $q->where('status', 1);
+            }])->with('translations')->where(['status' => 1])->orderBy('sequence', 'ASC')
+                ->with(['subcategories'          => function ($query) {
+                    $query->where('status', 1)->orderBy('sequence', 'ASC')->with('translations')->withCount(['approved_items', 'subcategories' => function ($q) {
+                        $q->where('status', 1);
+                    }]); // Order subcategories by 'sequence'
+                }, 'subcategories.subcategories' => function ($query) {
+                    $query->where('status', 1)->orderBy('sequence', 'ASC')->with('translations')->withCount(['approved_items', 'subcategories' => function ($q) {
+                        $q->where('status', 1);
+                    }]);
+                }]);
+
+
+            ResponseService::successResponse(null, $sql->get());
+        } catch (Throwable $th) {
+            ResponseService::logErrorResponse($th, 'API Controller -> getCategories');
+            ResponseService::errorResponse();
+        }
+    }
+
     public function getSubCategories(Request $request)
     {
         $validator = Validator::make($request->all(), [
@@ -1252,12 +1282,12 @@ class ApiController extends Controller
                         $q->where('status', 1);
                     }]);
                 }]);
-            
+
             // Filter by type if specified
             if (!empty($request->type)) {
                 $sql = $sql->type($request->type);
             }
-            
+
             if (!empty($request->category_id)) {
                 $sql = $sql->where('parent_category_id', $request->category_id);
             } else if (!empty($request->slug)) {
@@ -1386,7 +1416,7 @@ class ApiController extends Controller
                     'status' => 1
                 ]
             ];
-            
+
             ResponseService::successResponse("Data Fetched Successfully", $response);
         } catch (Throwable $th) {
             ResponseService::logErrorResponse($th, "API Controller -> getPaymentSettings");
@@ -1675,21 +1705,21 @@ class ApiController extends Controller
         }
         try {
             DB::beginTransaction();
-            
+
             // Skip payment configuration check and use cash as default
             $paymentMethod = 'cash';
-            
+
             $package = Package::whereNot('final_price', 0)->findOrFail($request->package_id);
 
             $purchasedPackage = UserPurchasedPackage::onlyActive()->where(['user_id' => Auth::user()->id, 'package_id' => $request->package_id])->first();
             if (!empty($purchasedPackage)) {
                 ResponseService::errorResponse("You already have applied for this package");
             }
-            
+
             // Use the payment method from request and generate a unique order ID
             $paymentGateway = $request->payment_method ?? 'cash';
             $uniqueOrderId = 'order_' . uniqid() . '_' . time();
-            
+
             //Add Payment Data to Payment Transactions Table
             $paymentTransactionData = PaymentTransaction::create([
                 'user_id'         => Auth::user()->id,
@@ -1788,10 +1818,10 @@ class ApiController extends Controller
             if (!$itemExists) {
                 return ResponseService::errorResponse('Item not found', 404);
             }
-            
+
             // Then check if the item meets the required criteria
             $item = Item::where('id', $request->item_id)->first();
-            
+
             // Verify user is not the owner
             if ($item->user_id == Auth::user()->id) {
                 return ResponseService::errorResponse('You cannot make an offer on your own item', 403);
@@ -2659,38 +2689,38 @@ class ApiController extends Controller
         if ($validator->fails()) {
             return ResponseService::validationError($validator->errors()->first());
         }
-        
+
         try {
-            $sql = Item::with('user:id,name,email,mobile,profile,created_at,is_verified,show_personal_details,country_code,gender', 
-                            'category:id,name,image', 
-                            'gallery_images:id,image,item_id', 
-                            'featured_items', 
-                            'favourites', 
-                            'item_custom_field_values.custom_field', 
+            $sql = Item::with('user:id,name,email,mobile,profile,created_at,is_verified,show_personal_details,country_code,country,state,city,categories,gender',
+                            'category:id,name,image',
+                            'gallery_images:id,image,item_id',
+                            'featured_items',
+                            'favourites',
+                            'item_custom_field_values.custom_field',
                             'area:id,name')
                 ->withCount('favourites')
                 ->select('items.*')
                 ->where('status', 'approved')
                 ->whereRaw("JSON_EXTRACT(special_tags, '$.exclusive_women') = 'true'");
-                
+
             // Handle sorting
             if ($request->sort_by) {
                 $sql = $this->applySorting($sql, $request->sort_by);
             } else {
                 $sql = $sql->orderBy('id', 'desc');
             }
-            
+
             // Apply pagination
             $total = $sql->count();
             $items = $sql->skip($request->offset ?? 0)
                 ->take($request->limit ?? 10)
                 ->get();
-                
+
             // Apply special tag determination to each item
             foreach ($items as $item) {
                 $this->determineSpecialTags($item);
             }
-            
+
             return ResponseService::successResponse('Items retrieved successfully', [
                 'items' => $items,
                 'total' => $total
@@ -2712,38 +2742,38 @@ class ApiController extends Controller
         if ($validator->fails()) {
             return ResponseService::validationError($validator->errors()->first());
         }
-        
+
         try {
-            $sql = Item::with('user:id,name,email,mobile,profile,created_at,is_verified,show_personal_details,country_code,gender', 
-                            'category:id,name,image', 
-                            'gallery_images:id,image,item_id', 
-                            'featured_items', 
-                            'favourites', 
-                            'item_custom_field_values.custom_field', 
+            $sql = Item::with('user:id,name,email,mobile,profile,created_at,is_verified,show_personal_details,country_code,country,state,city,categories,gender',
+                            'category:id,name,image',
+                            'gallery_images:id,image,item_id',
+                            'featured_items',
+                            'favourites',
+                            'item_custom_field_values.custom_field',
                             'area:id,name')
                 ->withCount('favourites')
                 ->select('items.*')
                 ->where('status', 'approved')
                 ->whereRaw("JSON_EXTRACT(special_tags, '$.corporate_package') = 'true'");
-                
+
             // Handle sorting
             if ($request->sort_by) {
                 $sql = $this->applySorting($sql, $request->sort_by);
             } else {
                 $sql = $sql->orderBy('id', 'desc');
             }
-            
+
             // Apply pagination
             $total = $sql->count();
             $items = $sql->skip($request->offset ?? 0)
                 ->take($request->limit ?? 10)
                 ->get();
-                
+
             // Apply special tag determination to each item
             foreach ($items as $item) {
                 $this->determineSpecialTags($item);
             }
-            
+
             return ResponseService::successResponse('Items retrieved successfully', [
                 'items' => $items,
                 'total' => $total
@@ -2783,28 +2813,28 @@ class ApiController extends Controller
         if ($validator->fails()) {
             return ResponseService::validationError($validator->errors()->first());
         }
-        
+
         try {
             // Get all items first and log total count
             $allItemsCount = Item::count();
             Log::info("Total items in database: " . $allItemsCount);
-            
+
             // Check for any special_tags values to understand structure
             $specialTagSamples = Item::whereNotNull('special_tags')
                                      ->where('special_tags', '<>', '')
                                      ->limit(3)
                                      ->pluck('special_tags');
             Log::info("Special tag samples: ", $specialTagSamples->toArray());
-            
+
             $currentDate = date('Y-m-d');
             $currentTime = date('H:i:s');
-            
-            $sql = Item::with('user:id,name,email,mobile,profile,created_at,is_verified,show_personal_details,country_code,gender', 
-                            'category:id,name,image', 
-                            'gallery_images:id,image,item_id', 
-                            'featured_items', 
-                            'favourites', 
-                            'item_custom_field_values.custom_field', 
+
+            $sql = Item::with('user:id,name,email,mobile,profile,created_at,is_verified,show_personal_details,country_code,country,state,city,categories,gender',
+                            'category:id,name,image',
+                            'gallery_images:id,image,item_id',
+                            'featured_items',
+                            'favourites',
+                            'item_custom_field_values.custom_field',
                             'area:id,name')
                 ->withCount('favourites')
                 ->select('items.*')
@@ -2833,38 +2863,38 @@ class ApiController extends Controller
                           })
                           ->orWhereNull('expiration_date');
                 });
-                
+
             // For testing, let's see items without filtering by status first
             $unfilteredCount = $sql->count();
             Log::info("Items matching experience criteria (without status filter): " . $unfilteredCount);
-            
+
             // Handle sorting
             if ($request->sort_by) {
                 $sql = $this->applySorting($sql, $request->sort_by);
             } else {
                 $sql = $sql->orderBy('id', 'desc');
             }
-            
+
             // Apply pagination
             $total = $sql->count();
             Log::info("Experience items count (with status=active): " . $total);
-            
+
             $items = $sql->skip($request->offset ?? 0)
                 ->take($request->limit ?? 10)
                 ->get();
-            
+
             // Apply special tag determination to each item
             foreach ($items as $item) {
                 $this->determineSpecialTags($item);
                 $this->determineServiceType($item);
                 Log::info("Found experience item: " . $item->id . ", provider_item_type: " . $item->provider_item_type . ", special_tags: " . $item->special_tags);
             }
-            
+
             // If we didn't find any items even after trying all these methods, let's return all items for debugging
             if ($total == 0 && $allItemsCount > 0) {
                 Log::warning("No experience items found with specific criteria. Check your data to ensure experience items exist.");
             }
-            
+
             return ResponseService::successResponse('Experience items retrieved successfully', [
                 'items' => $items,
                 'total' => $total
@@ -2885,32 +2915,32 @@ class ApiController extends Controller
         if ($validator->fails()) {
             return ResponseService::validationError($validator->errors()->first());
         }
-        
+
         try {
-            $sql = Item::with('user:id,name,email,mobile,profile,created_at,is_verified,show_personal_details,country_code,gender', 
-                            'category:id,name,image', 
-                            'gallery_images:id,image,item_id', 
-                            'featured_items', 
-                            'favourites', 
-                            'item_custom_field_values.custom_field', 
+            $sql = Item::with('user:id,name,email,mobile,profile,created_at,is_verified,show_personal_details,country_code,country,state,city,categories,gender',
+                            'category:id,name,image',
+                            'gallery_images:id,image,item_id',
+                            'featured_items',
+                            'favourites',
+                            'item_custom_field_values.custom_field',
                             'area:id,name')
                 ->withCount('favourites')
                 ->select('items.*')
                 ->where('status', 'approved')
                 ->orderBy('created_at', 'desc'); // Always sort by newest first
-            
+
             // Apply pagination
             $total = $sql->count();
             $items = $sql->skip($request->offset ?? 0)
                 ->take($request->limit ?? 10)
                 ->get();
-            
+
             // Process each item
             foreach ($items as $item) {
                 $this->determineSpecialTags($item);
                 $this->determineServiceType($item);
             }
-            
+
             return ResponseService::successResponse('Newest items retrieved successfully', [
                 'items' => $items,
                 'total' => $total
@@ -2961,7 +2991,7 @@ class ApiController extends Controller
 
         try {
             // Check if the user is trying to review themselves
-            if ($request->user_id == Auth::id()) {  
+            if ($request->user_id == Auth::id()) {
                 ResponseService::errorResponse("You cannot review yourself.");
             }
 
@@ -2969,7 +2999,7 @@ class ApiController extends Controller
             $existingReview = UserReview::where('user_id', $request->user_id)
                                         ->where('reviewer_id', Auth::id())
                                         ->first();
-            
+
             if ($existingReview) {
                 ResponseService::errorResponse("You have already reviewed this user.");
             }
@@ -3008,7 +3038,7 @@ class ApiController extends Controller
         try {
             // Verify the item exists and belongs to the specified user
             $item = Item::findOrFail($request->service_id);
-            
+
             if ($item->user_id != $request->user_id) {
                 ResponseService::errorResponse("The specified service does not belong to the specified user.");
             }
@@ -3022,7 +3052,7 @@ class ApiController extends Controller
             $existingReview = ServiceReview::where('service_id', $request->service_id)
                                            ->where('reviewer_id', Auth::id())
                                            ->first();
-            
+
             if ($existingReview) {
                 ResponseService::errorResponse("You have already reviewed this service.");
             }
@@ -3061,7 +3091,7 @@ class ApiController extends Controller
             $reviews = ServiceReview::where('service_id', $request->service_id)
                                     ->with(['reviewer:id,name,profile'])
                                     ->paginate(10);
-            
+
             // Calculate average rating
             $averageRating = $reviews->avg('ratings');
 
@@ -3097,7 +3127,7 @@ class ApiController extends Controller
             $reviews = UserReview::where('user_id', $request->user_id)
                                  ->with(['reviewer:id,name,profile'])
                                  ->paginate(10);
-            
+
             // Calculate average rating
             $averageRating = $reviews->avg('ratings');
 
@@ -3119,42 +3149,42 @@ class ApiController extends Controller
     private function determineSpecialTags($item)
     {
         Log::info("Processing special_tags for item {$item->id}");
-        
+
         // Return empty object if no special tags
         if (!isset($item->special_tags) || empty($item->special_tags)) {
             Log::info("No special_tags found for item {$item->id}, returning empty array");
             return [];
         }
-        
+
         // Process special_tags value based on its type
         try {
             // If it's already an object or array
             if (is_object($item->special_tags) || is_array($item->special_tags)) {
                 Log::info("Item {$item->id} special_tags is already an object/array");
                 $tags = (array)$item->special_tags;
-            } 
+            }
             // If it's a string, try to decode it
             else if (is_string($item->special_tags)) {
                 Log::info("Decoding JSON string for item {$item->id}: " . $item->special_tags);
                 // Try to decode as JSON
                 $decodedTags = json_decode($item->special_tags, true);
-                
+
                 // If decoding failed, try again by replacing escaped quotes
                 if (json_last_error() !== JSON_ERROR_NONE) {
                     $cleaned = str_replace('\"', '"', $item->special_tags);
                     $decodedTags = json_decode($cleaned, true);
                 }
-                
+
                 $tags = $decodedTags ?: [];
             } else {
                 // Unknown type
                 Log::info("Special tags has unknown type: " . gettype($item->special_tags));
                 $tags = [];
             }
-            
+
             // Log the result
             Log::info("Processed special_tags for item {$item->id}: ", ['tags' => $tags]);
-            
+
             return $tags;
         } catch (\Exception $e) {
             Log::error("Error processing special_tags for item {$item->id}: " . $e->getMessage());
@@ -3171,7 +3201,7 @@ class ApiController extends Controller
         if (isset($item->provider_item_type) && $item->provider_item_type === 'experience') {
             return 'exclusive_experience';
         }
-        
+
         // Default to regular service if no explicit type is found
         return 'service';
     }
@@ -3184,14 +3214,14 @@ class ApiController extends Controller
         if (!$user) {
             return null;
         }
-        
+
         // Check if user has business profile or expert designation
         if (isset($user->account_type) && $user->account_type === 'business') {
             return 'business';
         } elseif (isset($user->is_expert) && $user->is_expert) {
             return 'expert';
         }
-        
+
         return 'regular';
     }
 
@@ -3208,15 +3238,15 @@ class ApiController extends Controller
         if ($validator->fails()) {
             return ResponseService::validationError($validator->errors()->first());
         }
-        
+
         try {
             // Get items that have active featured entries
-            $sql = Item::with('user:id,name,email,mobile,profile,created_at,is_verified,show_personal_details,country_code,gender', 
-                            'category:id,name,image', 
-                            'gallery_images:id,image,item_id', 
-                            'featured_items', 
-                            'favourites', 
-                            'item_custom_field_values.custom_field', 
+            $sql = Item::with('user:id,name,email,mobile,profile,created_at,is_verified,show_personal_details,country_code,gender',
+                            'category:id,name,image',
+                            'gallery_images:id,image,item_id',
+                            'featured_items',
+                            'favourites',
+                            'item_custom_field_values.custom_field',
                             'area:id,name')
                 ->withCount('favourites')
                 ->select('items.*')
@@ -3231,19 +3261,19 @@ class ApiController extends Controller
                 })
                 ->whereIn('status', ['approved', 'review']) // Include both approved and review items
                 ->orderBy('updated_at', 'desc'); // Most recently updated first
-            
+
             // Apply pagination
             $total = $sql->count();
             $items = $sql->skip($request->offset ?? 0)
                 ->take($request->limit ?? 10)
                 ->get();
-            
+
             // Process each item
             foreach ($items as $item) {
                 $this->determineSpecialTags($item);
                 $this->determineServiceType($item);
             }
-            
+
             return ResponseService::successResponse('Featured items fetched successfully', [
                 'total' => $total,
                 'data' => $items
@@ -3253,7 +3283,7 @@ class ApiController extends Controller
             return ResponseService::errorResponse();
         }
     }
-    
+
     /**
      * Make a user featured by current user's advertisement package
      */
@@ -3261,23 +3291,23 @@ class ApiController extends Controller
     {
         try {
             DB::beginTransaction();
-            
+
             $validator = Validator::make($request->all(), [
                 'user_id' => 'required|exists:users,id',
             ]);
-            
+
             if ($validator->fails()) {
                 return ResponseService::validationError($validator->errors()->first());
             }
-            
+
             $user = Auth::user();
             $targetUser = User::findOrFail($request->user_id);
-            
+
             // Check if target user is Business or Expert
             if (!$targetUser->hasRole(['Business', 'Expert'])) {
                 return ResponseService::errorResponse("Only Business and Expert users can be featured");
             }
-            
+
             // Get active advertisement package for current user
             $userPackage = UserPurchasedPackage::onlyActive()
                 ->where(['user_id' => $user->id])
@@ -3286,25 +3316,25 @@ class ApiController extends Controller
                     $q->where(['type' => 'advertisement']);
                 })
                 ->first();
-            
+
             if (!$userPackage) {
                 return ResponseService::errorResponse("You don't have an active advertisement package");
             }
-            
+
             // Check if user is already featured with this package
             $featuredUser = FeaturedUsers::where([
-                'user_id' => $request->user_id, 
+                'user_id' => $request->user_id,
                 'package_id' => $userPackage->package_id
             ])->first();
-            
+
             if ($featuredUser) {
                 return ResponseService::errorResponse("User is already featured");
             }
-            
+
             // Increment used limit of package
             $userPackage->used_limit++;
             $userPackage->save();
-            
+
             // Create featured user entry
             FeaturedUsers::create([
                 'user_id' => $request->user_id,
@@ -3313,7 +3343,7 @@ class ApiController extends Controller
                 'start_date' => date('Y-m-d'),
                 'end_date' => $userPackage->end_date
             ]);
-            
+
             DB::commit();
             return ResponseService::successResponse("User featured successfully");
         } catch (Throwable $th) {
@@ -3322,7 +3352,7 @@ class ApiController extends Controller
             return ResponseService::errorResponse();
         }
     }
-    
+
     /**
      * Get all featured users that are currently active
      */
@@ -3333,16 +3363,16 @@ class ApiController extends Controller
             'offset' => 'nullable|integer',
             'role' => 'nullable|in:Business,Expert'
         ]);
-        
+
         if ($validator->fails()) {
             return ResponseService::validationError($validator->errors()->first());
         }
-        
+
         try {
             // Get users that have active featured entries
             $sql = User::with([
-                    'items', 
-                    'featured_users', 
+                    'items',
+                    'featured_users',
                     'roles'
                 ])
                 ->select('users.*')
@@ -3357,7 +3387,7 @@ class ApiController extends Controller
 
             // Log the initial query
             Log::info('Featured users initial query built');
-                
+
             // Filter by role if provided
             if ($request->has('role')) {
                 $sql->role($request->role);
@@ -3369,22 +3399,22 @@ class ApiController extends Controller
                 });
                 Log::info('Filtering by Business and Expert roles');
             }
-            
+
             // Apply pagination
             $total = $sql->count();
             Log::info('Found ' . $total . ' featured users');
-            
+
             $users = $sql->skip($request->offset ?? 0)
                 ->take($request->limit ?? 10)
                 ->get();
-            
+
             Log::info('Retrieved ' . count($users) . ' featured users after pagination');
-            
+
             // If we have no users, check if there are any featured users at all
             if (count($users) === 0) {
                 $totalFeaturedUsersCount = FeaturedUsers::count();
                 Log::info('Total featured_users entries in database: ' . $totalFeaturedUsersCount);
-                
+
                 // Check if the issue is with active date filtering
                 $activeFeaturedUsersCount = FeaturedUsers::whereDate('start_date', '<=', date('Y-m-d'))
                     ->where(function ($q) {
@@ -3394,28 +3424,28 @@ class ApiController extends Controller
                     ->count();
                 Log::info('Active featured_users entries in database: ' . $activeFeaturedUsersCount);
             }
-            
+
             // Process each user to include needed fields
             $processedUsers = [];
             foreach ($users as $user) {
                 // Add user type information
                 $user->user_type = $this->determineUserType($user);
-                
+
                 // Explicitly set the featured status
                 $user->is_featured = true;
-                
+
                 // Add the user to the processed array with necessary fields
                 $userData = $user->toArray();
                 $userData['is_featured'] = true;
                 $userData['featured_users_count'] = count($user->featured_users);
                 $userData['roles'] = $user->roles->pluck('name')->toArray();
                 $userData['items_count'] = $user->items->count();
-                
+
                 // Process categories: Convert comma-separated IDs to names
                 if (!empty($userData['categories'])) {
                     $categoryIds = explode(',', $userData['categories']);
                     $categoryNames = [];
-                    
+
                     // Fetch category names from database
                     if (!empty($categoryIds)) {
                         $categories = \App\Models\Category::whereIn('id', $categoryIds)->get();
@@ -3428,14 +3458,14 @@ class ApiController extends Controller
                         $userData['categories_array'] = $categoryNames;
                     }
                 }
-                
+
                 // Process each item to add category name
                 if (!empty($userData['items'])) {
                     $itemCategoryIds = array_unique(array_column($userData['items'], 'category_id'));
-                    
+
                     // Fetch all needed category names at once
                     $itemCategories = \App\Models\Category::whereIn('id', $itemCategoryIds)->pluck('name', 'id')->toArray();
-                    
+
                     // Add category name to each item
                     foreach ($userData['items'] as $key => $item) {
                         if (isset($item['category_id']) && isset($itemCategories[$item['category_id']])) {
@@ -3445,12 +3475,12 @@ class ApiController extends Controller
                         }
                     }
                 }
-                
+
                 $processedUsers[] = $userData;
             }
-            
+
             Log::info('Processed ' . count($processedUsers) . ' users with additional fields');
-            
+
             // Return the data directly instead of using the UserCollection resource
             return ResponseService::successResponse('Featured users fetched successfully', [
                 'total' => $total,
@@ -3472,10 +3502,13 @@ class ApiController extends Controller
             'id'           => 'nullable',
             'gender'       => 'nullable|string', // Remove strict case-sensitive validation
             'category'     => 'nullable|string',
-            'location'     => 'nullable|string',
+            'country'      => 'nullable|string',
+            'state'        => 'nullable|string',
+            'city'         => 'nullable|string',
             'type'         => 'nullable|string',
             'rating_from'  => 'nullable|numeric|min:0|max:5',
             'rating_to'    => 'nullable|numeric|min:0|max:5',
+            'search'        => 'nullable|string',
             'sort_by'      => 'nullable|in:name-asc,name-desc,newest,oldest'
         ]);
 
@@ -3486,6 +3519,7 @@ class ApiController extends Controller
         try {
             $query = User::with(['roles:id,name'])
                 ->select('users.*')
+                ->whereNotNull('type')
                 ->when($request->id, function ($query) use ($request) {
                     return $query->where('id', $request->id);
                 })
@@ -3493,8 +3527,17 @@ class ApiController extends Controller
                     // Convert both DB value and request value to lowercase for case-insensitive comparison
                     return $query->whereRaw('LOWER(gender) = ?', [strtolower($request->gender)]);
                 })
-                ->when($request->location, function ($query) use ($request) {
-                    return $query->where('location', 'LIKE', '%' . $request->location . '%');
+                ->when($request->country, function ($query) use ($request) {
+                    return $query->where('country', 'LIKE', '%' . $request->country . '%');
+                })
+                ->when($request->state, function ($query) use ($request) {
+                    return $query->where('state', 'LIKE', '%' . $request->state . '%');
+                })
+                ->when($request->city, function ($query) use ($request) {
+                    return $query->where('city', 'LIKE', '%' . $request->city . '%');
+                })
+                ->when($request->search, function ($query) use ($request) {
+                    return $query->where('name', 'LIKE', '%' . $request->search . '%');
                 })
                 ->when($request->category, function ($query) use ($request) {
                     $categoryId = $request->category;
@@ -3522,7 +3565,7 @@ class ApiController extends Controller
                 ->when($request->rating_from || $request->rating_to, function ($query) use ($request) {
                     $ratingFrom = $request->rating_from ?? 0;
                     $ratingTo = $request->rating_to ?? 5;
-                    
+
                     return $query->leftJoin('user_reviews', 'users.id', '=', 'user_reviews.user_id')
                         ->select('users.*', DB::raw('AVG(user_reviews.ratings) as average_rating'))
                         ->groupBy('users.id')

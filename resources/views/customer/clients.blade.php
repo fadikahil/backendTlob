@@ -99,8 +99,16 @@
                             </div>
                         </div>
                         <div class="mb-3">
-                            <label for="edit_location" class="form-label">{{ __('Location') }}</label>
-                            <input type="text" class="form-control" id="edit_location" name="address">
+                            <label for="edit_country" class="form-label">{{ __('Country') }}</label>
+                            <input type="text" class="form-control" id="edit_country" name="country">
+                        </div>
+                        <div class="mb-3">
+                            <label for="edit_state" class="form-label">{{ __('State') }}</label>
+                            <input type="text" class="form-control" id="edit_state" name="state">
+                        </div>
+                        <div class="mb-3">
+                            <label for="edit_city" class="form-label">{{ __('City') }}</label>
+                            <input type="text" class="form-control" id="edit_city" name="city">
                         </div>
                     </form>
                 </div>
@@ -266,8 +274,10 @@
             $('#edit_email').val(row.email);
             $('#edit_phone').val(row.phone);
             $('#edit_gender').val(row.gender);
-            $('#edit_location').val(row.location);
-            
+            $('#edit_country').val(row.country);
+            $('#edit_state').val(row.state);
+            $('#edit_city').val(row.city);
+
             $('#editClientModal').modal('show');
         },
         'click .delete-user': function (e, value, row, index) {

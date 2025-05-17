@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\ApiController;
+use App\Http\Controllers\Auth\ForgotPasswordController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -77,6 +78,7 @@ Route::post('login', [ApiController::class, 'login']);
 Route::get('get-package', [ApiController::class, 'getPackage']);
 Route::get('get-languages', [ApiController::class, 'getLanguages']);
 Route::post('user-signup', [ApiController::class, 'userSignup']);
+Route::post('forgot-password', [ForgotPasswordController::class, 'forgotPassword']);
 Route::post('set-item-total-click', [ApiController::class, 'setItemTotalClick']);
 Route::get('get-system-settings', [ApiController::class, 'getSystemSettings']);
 Route::get('app-payment-status', [ApiController::class, 'appPaymentStatus']);
@@ -86,6 +88,7 @@ Route::get('get-users', [ApiController::class, 'getUsers']);
 Route::get('get-slider', [ApiController::class, 'getSlider']);
 Route::get('get-report-reasons', [ApiController::class, 'getReportReasons']);
 Route::get('get-categories', [ApiController::class, 'getSubCategories']);
+Route::get('get-all-categories', [ApiController::class, 'getAllCategories']);
 Route::get('get-parent-categories', [ApiController::class, 'getParentCategoryTree']);
 Route::get('get-featured-section', [ApiController::class, 'getFeaturedSection']);
 Route::get('blogs', [ApiController::class, 'getBlog']);

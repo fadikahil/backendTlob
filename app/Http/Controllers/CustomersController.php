@@ -126,6 +126,7 @@ class CustomersController extends Controller {
             $tempRow['is_verified'] = $row->is_verified;
             $tempRow['auto_approve_item'] = $row->auto_approve_item;
             $tempRow['role'] = $role;
+            $tempRow['location'] = $row->country . ', '. $row-> city;
 
             // Add active package information
             $activePackage = $row->user_purchased_packages
@@ -302,12 +303,12 @@ class CustomersController extends Controller {
             $tempRow['has_active_package'] = !empty($activePackage);
             $tempRow['active_package_name'] = $activePackage ? ($activePackage->package->name ?? 'Unknown Package') : null;
             $tempRow['active_package_expiry'] = $activePackage ? $activePackage->end_date : null;
+            $tempRow['location'] = $row->country . ', '. $row-> city;
 
             // Add role-specific fields
             if ($role === 'Expert') {
                 // Expert-specific fields
                 $tempRow['gender'] = $row->gender ?? ''; // Use gender from database
-                $tempRow['location'] = $row->location ?? $row->address ?? ''; // Use location first, fallback to address
                 $tempRow['categories'] = $row->categories ?? '';
                 $tempRow['expertise'] = ''; // Not in database
                 $tempRow['experience'] = ''; // Not in database
@@ -327,7 +328,6 @@ class CustomersController extends Controller {
             } elseif ($role === 'Business') {
                 // Business-specific fields
                 $tempRow['business_name'] = $row->name;
-                $tempRow['location'] = $row->location ?? '';
                 $tempRow['categories'] = $row->categories ?? '';
                 $tempRow['phone'] = $row->phone ?? '';
                 $tempRow['services_count'] = isset($row->items) ? count($row->items) : 0;
@@ -346,7 +346,6 @@ class CustomersController extends Controller {
             } elseif ($role === 'Client') {
                 // Client-specific fields
                 $tempRow['gender'] = ''; // Not in database
-                $tempRow['location'] = $row->address ?? '';
                 $tempRow['bookings_count'] = 0; // Default to 0 since we can't check
             }
 
@@ -599,7 +598,9 @@ class CustomersController extends Controller {
                 'email' => 'required|email|max:255|unique:users,email,'.$request->id,
                 'mobile' => 'nullable|string|max:20',
                 'gender' => 'nullable|string|in:male,female,other',
-                'address' => 'nullable|string|max:255',
+                'country' => 'nullable|string',
+                'state' => 'nullable|string',
+                'city' => 'nullable|string',
             ]);
             
             if ($validator->fails()) {
@@ -625,7 +626,9 @@ class CustomersController extends Controller {
                 'email' => $request->email,
                 'mobile' => $request->mobile,
                 'gender' => $request->gender,
-                'address' => $request->address,
+                'country' => $request->country,
+                'city' => $request->city,
+                'state' => $request->state
             ]);
             
             return response()->json([

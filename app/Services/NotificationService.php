@@ -21,6 +21,7 @@ class NotificationService {
      */
     public static function sendFcmNotification(array $registrationIDs, string|null $title = '', string|null $message = '', string $type = "default", array $customBodyFields = []): string|array|bool {
         try {
+            ds($title);
             //TODO : Use this from caching
             $project_id = Setting::select('value')->where('name', 'firebase_project_id')->first();
             if (empty($project_id->value)) {
@@ -53,7 +54,7 @@ class NotificationService {
                 "body"  => $message,
                 "type"  => $type,
             ];
-            foreach ($registrationIDs as $registrationID) {
+            foreach (collect($registrationIDs)->unique() as $registrationID) {
                 $platform = $deviceInfo->first(function ($q) use ($registrationID) {
                     return $q->fcm_token == $registrationID;
                 });

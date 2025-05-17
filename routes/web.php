@@ -1,5 +1,7 @@
 <?php
 
+use App\Http\Controllers\Auth\ForgotPasswordController;
+use App\Http\Controllers\Auth\ResetPasswordController;
 use App\Http\Controllers\BlogController;
 use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\Controller;
@@ -45,12 +47,15 @@ use Rap2hpoutre\LaravelLogViewer\LogViewerController;
 */
 
 Auth::routes();
+
 Route::get('/', static function () {
     if (Auth::user()) {
         return redirect('/home');
     }
     return view('auth.login');
 });
+Route::get('password/reset/{token}', [ForgotPasswordController::class, 'showResetPassword'])->name('password.reset');;
+Route::get('reset-password-successful', [ForgotPasswordController::class, 'resetPasswordSuccessful'])->name('reset-password-successful');
 
 Route::get('page/privacy-policy', static function () {
     $privacy_policy = CachingService::getSystemSettings('privacy_policy');

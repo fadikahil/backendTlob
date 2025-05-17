@@ -11,9 +11,9 @@
 </head>
 <body>
 <div id="app">
-    @include('layouts.sidebar')
+    @if(Auth::user() !== null) @include('layouts.sidebar') @endif
     <div id="main" class='layout-navbar'>
-        @include('layouts.topbar')
+        @if(Auth::user() !== null) @include('layouts.topbar') @endif
         <div id="main-content">
             <div class="page-heading">
                 @yield('page-title')

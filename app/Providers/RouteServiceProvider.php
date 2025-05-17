@@ -18,6 +18,8 @@ class RouteServiceProvider extends ServiceProvider {
      */
     public const HOME = '/home';
 
+    public const RESET_PASSWORD_SUCCESSFUL = '/reset-password-successful';
+
     /**
      * Define your route model bindings, pattern filters, and other route configuration.
      *

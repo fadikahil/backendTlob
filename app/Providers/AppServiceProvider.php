@@ -34,7 +34,7 @@ class AppServiceProvider extends ServiceProvider
                 $user = $accessToken->tokenable;
                 
                 // If the user has status=0 or is soft-deleted, reject the token
-                if ((isset($user->status) && (int)$user->status === 0) || $user->deleted_at !== null) {
+                if ((isset($user->status) && (int)$user->status === 0) || (isset($user->deleted_at) && $user->deleted_at !== null)) {
                     // We're returning false to make the token invalid
                     return false;
                 }

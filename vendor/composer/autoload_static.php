@@ -9,8 +9,8 @@ class ComposerStaticInit28ef538907243c5a453e28f57975c3aa
     public static $files = array (
         '6e3fae29631ef280660b3cdad06f25a8' => __DIR__ . '/..' . '/symfony/deprecation-contracts/function.php',
         '0e6d7bf4a5811bfa5cf40c5ccd6fae6a' => __DIR__ . '/..' . '/symfony/polyfill-mbstring/bootstrap.php',
-        '320cde22f66dd4f5d3fd621d3e88b98f' => __DIR__ . '/..' . '/symfony/polyfill-ctype/bootstrap.php',
         'e69f7f6ee287b969198c3c9d6777bd38' => __DIR__ . '/..' . '/symfony/polyfill-intl-normalizer/bootstrap.php',
+        '320cde22f66dd4f5d3fd621d3e88b98f' => __DIR__ . '/..' . '/symfony/polyfill-ctype/bootstrap.php',
         '8825ede83f2f289127722d4e842cf7e8' => __DIR__ . '/..' . '/symfony/polyfill-intl-grapheme/bootstrap.php',
         '7b11c4dc42b3b3023073cb14e519683c' => __DIR__ . '/..' . '/ralouphie/getallheaders/src/getallheaders.php',
         'b6b991a57620e2fb6b2f66f03fe9ddc2' => __DIR__ . '/..' . '/symfony/string/Resources/functions.php',
@@ -112,6 +112,7 @@ class ComposerStaticInit28ef538907243c5a453e28f57975c3aa
             'Symfony\\Component\\Routing\\' => 26,
             'Symfony\\Component\\Process\\' => 26,
             'Symfony\\Component\\Mime\\' => 23,
+            'Symfony\\Component\\Mailer\\Bridge\\Mailgun\\' => 40,
             'Symfony\\Component\\Mailer\\' => 25,
             'Symfony\\Component\\HttpKernel\\' => 29,
             'Symfony\\Component\\HttpFoundation\\' => 33,
@@ -408,6 +409,10 @@ class ComposerStaticInit28ef538907243c5a453e28f57975c3aa
         'Symfony\\Component\\Mime\\' => 
         array (
             0 => __DIR__ . '/..' . '/symfony/mime',
+        ),
+        'Symfony\\Component\\Mailer\\Bridge\\Mailgun\\' => 
+        array (
+            0 => __DIR__ . '/..' . '/symfony/mailgun-mailer',
         ),
         'Symfony\\Component\\Mailer\\' => 
         array (
@@ -9101,6 +9106,13 @@ class ComposerStaticInit28ef538907243c5a453e28f57975c3aa
         'Symfony\\Component\\HttpKernel\\RebootableInterface' => __DIR__ . '/..' . '/symfony/http-kernel/RebootableInterface.php',
         'Symfony\\Component\\HttpKernel\\TerminableInterface' => __DIR__ . '/..' . '/symfony/http-kernel/TerminableInterface.php',
         'Symfony\\Component\\HttpKernel\\UriSigner' => __DIR__ . '/..' . '/symfony/http-kernel/UriSigner.php',
+        'Symfony\\Component\\Mailer\\Bridge\\Mailgun\\RemoteEvent\\MailgunPayloadConverter' => __DIR__ . '/..' . '/symfony/mailgun-mailer/RemoteEvent/MailgunPayloadConverter.php',
+        'Symfony\\Component\\Mailer\\Bridge\\Mailgun\\Transport\\MailgunApiTransport' => __DIR__ . '/..' . '/symfony/mailgun-mailer/Transport/MailgunApiTransport.php',
+        'Symfony\\Component\\Mailer\\Bridge\\Mailgun\\Transport\\MailgunHeadersTrait' => __DIR__ . '/..' . '/symfony/mailgun-mailer/Transport/MailgunHeadersTrait.php',
+        'Symfony\\Component\\Mailer\\Bridge\\Mailgun\\Transport\\MailgunHttpTransport' => __DIR__ . '/..' . '/symfony/mailgun-mailer/Transport/MailgunHttpTransport.php',
+        'Symfony\\Component\\Mailer\\Bridge\\Mailgun\\Transport\\MailgunSmtpTransport' => __DIR__ . '/..' . '/symfony/mailgun-mailer/Transport/MailgunSmtpTransport.php',
+        'Symfony\\Component\\Mailer\\Bridge\\Mailgun\\Transport\\MailgunTransportFactory' => __DIR__ . '/..' . '/symfony/mailgun-mailer/Transport/MailgunTransportFactory.php',
+        'Symfony\\Component\\Mailer\\Bridge\\Mailgun\\Webhook\\MailgunRequestParser' => __DIR__ . '/..' . '/symfony/mailgun-mailer/Webhook/MailgunRequestParser.php',
         'Symfony\\Component\\Mailer\\Command\\MailerTestCommand' => __DIR__ . '/..' . '/symfony/mailer/Command/MailerTestCommand.php',
         'Symfony\\Component\\Mailer\\DataCollector\\MessageDataCollector' => __DIR__ . '/..' . '/symfony/mailer/DataCollector/MessageDataCollector.php',
         'Symfony\\Component\\Mailer\\DelayedEnvelope' => __DIR__ . '/..' . '/symfony/mailer/DelayedEnvelope.php',

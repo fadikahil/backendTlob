@@ -50,13 +50,15 @@
                         <a href="#" id="topbarUserDropdown"
                            class="user-dropdown d-flex align-items-center dropend dropdown-toggle"
                            data-bs-toggle="dropdown" aria-expanded="false">
-                            <div class="avatar avatar-md2">
-                                <img src="{{ Auth::user()->profile == '' ? url('assets/images/faces/2.jpg') : Auth::user()->profile }} " alt="">
-                            </div>
-                            <div class="text">
-                                <h6 class="user-dropdown-name">{{ Auth::user()->name }}</h6>
-                                <p class="user-dropdown-status text-sm text-muted"></p>
-                            </div>
+                            @if(Auth::user() !== null)
+                                <div class="avatar avatar-md2">
+                                    <img src="{{ Auth::user()->profile == '' ? url('assets/images/faces/2.jpg') : Auth::user()->profile }} " alt="">
+                                </div>
+                                <div class="text">
+                                    <h6 class="user-dropdown-name">{{ Auth::user()->name }}</h6>
+                                    <p class="user-dropdown-status text-sm text-muted"></p>
+                                </div>
+                            @endif
                         </a>
                         <ul class="dropdown-menu dropdown-menu-end topbarUserDropdown" aria-labelledby="topbarUserDropdown">
                             <li><a class="dropdown-item" href="{{ route('change-password.index') }}"><i class="icon-mid bi bi-gear me-2"></i>{{__("Change Password")}}</a></li>
