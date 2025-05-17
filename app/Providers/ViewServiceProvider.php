@@ -30,7 +30,7 @@ class ViewServiceProvider extends ServiceProvider {
 
         View::composer('layouts.sidebar', static function (\Illuminate\View\View $view) {
             $settings = CachingService::getSystemSettings('company_logo');
-            $view->with('company_logo', self::to_path($settings) ?? '');
+            $view->with('company_logo', ($settings) ?? '');
         });
 
         View::composer('layouts.main', static function (\Illuminate\View\View $view) {
