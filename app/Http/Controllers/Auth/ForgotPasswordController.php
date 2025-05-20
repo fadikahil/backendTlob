@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Services\ResponseService;
 use Illuminate\Foundation\Auth\SendsPasswordResetEmails;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
 
 class ForgotPasswordController extends Controller
@@ -32,7 +33,7 @@ class ForgotPasswordController extends Controller
         if ($validator->fails()) {
             ResponseService::validationError($validator->errors()->first());
         }
-
+        Log::info("Forgot Password Requested with email {$request->email}");
         return self::sendResetLinkEmail($request);
     }
 
