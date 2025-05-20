@@ -737,6 +737,8 @@ class ApiController extends Controller
             'provider_item_type' => 'nullable|in:service,experience',
             'sort_by'           => 'nullable|in:new-to-old,old-to-new,price-high-to-low,price-low-to-high,popular_items',
             'posted_since'      => 'nullable|in:all-time,today,within-1-week,within-2-week,within-1-month,within-3-month',
+            'rating_from'  => 'nullable|numeric|min:0|max:5',
+            'rating_to'    => 'nullable|numeric|min:0|max:5',
         ]);
 
 //        ds($request->all());
@@ -885,6 +887,15 @@ class ApiController extends Controller
                         ->where('longitude', '!=', 0)
                         ->having('distance', '<', $radius)
                         ->orderBy('distance', 'asc');
+                })
+                ->when($request->rating_from || $request->rating_to, function ($query) use ($request) {
+                    $ratingFrom = $request->rating_from ?? 0;
+                    $ratingTo = $request->rating_to ?? 5;
+
+                    return $query->leftJoin('user_reviews', 'items.user_id', '=', 'user_reviews.user_id')
+                        ->select('items.*', DB::raw('AVG(user_reviews.ratings) as average_rating'))
+                        ->groupBy('items.id')
+                        ->havingRaw('(average_rating >= ? AND average_rating <= ?) OR ((average_rating IS NULL) and ? = 0)', [$ratingFrom, $ratingTo, $ratingFrom]);
                 });
 
             //            // Other users should only get approved items
@@ -3125,15 +3136,23 @@ class ApiController extends Controller
         try {
             // Get all reviews for the specified user
             $reviews = UserReview::where('user_id', $request->user_id)
-                                 ->with(['reviewer:id,name,profile'])
-                                 ->paginate(10);
+                ->with(['reviewer:id,name,profile'])
+                ->paginate(10);
 
             // Calculate average rating
-            $averageRating = $reviews->avg('ratings');
+            $averageRating = UserReview::where('user_id', $request->user_id)->avg('ratings');
+
+            $current_user_has_rated = false;
+            if (Auth::user() !== null) {
+                $current_user_id = Auth::id();
+                $current_user_has_rated = UserReview::where('reviewer_id', $current_user_id)->exists();
+                ds($current_user_id);
+            }
 
             $response = [
                 'reviews' => $reviews,
                 'average_rating' => $averageRating,
+                'current_user_has_rated' => $current_user_has_rated,
             ];
 
             ResponseService::successResponse("Success", $response);
@@ -3569,7 +3588,7 @@ class ApiController extends Controller
                     return $query->leftJoin('user_reviews', 'users.id', '=', 'user_reviews.user_id')
                         ->select('users.*', DB::raw('AVG(user_reviews.ratings) as average_rating'))
                         ->groupBy('users.id')
-                        ->havingRaw('(average_rating >= ? AND average_rating <= ?) OR average_rating IS NULL', [$ratingFrom, $ratingTo]);
+                        ->havingRaw('(average_rating >= ? AND average_rating <= ?) OR ((average_rating IS NULL) and ? = 0)', [$ratingFrom, $ratingTo, $ratingFrom]);
                 });
 
             // Apply sorting

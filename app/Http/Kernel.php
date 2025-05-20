@@ -5,6 +5,7 @@ namespace App\Http;
 use App\Http\Middleware\ApiLocalizationMiddleware;
 use App\Http\Middleware\CheckUserStatus;
 use App\Http\Middleware\DemoMiddleware;
+use App\Http\Middleware\OptionalAuth;
 use App\Http\Middleware\SanctumStatusCheck;
 use Illuminate\Foundation\Http\Kernel as HttpKernel;
 use Spatie\Permission\Middleware\PermissionMiddleware;
@@ -80,5 +81,6 @@ class Kernel extends HttpKernel {
         'permission'       => PermissionMiddleware::class,
         'check.status'     => CheckUserStatus::class,
         'auth.status'      => SanctumStatusCheck::class,
+        'auth.optional'    => OptionalAuth::class,
     ];
 }
