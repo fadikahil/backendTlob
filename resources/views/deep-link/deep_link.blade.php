@@ -46,13 +46,13 @@ $(document).ready(function () {
 
     window.location.href = appScheme;
 
-    setTimeout(function () {
-        if (!document.hidden && !document.webkitHidden) {
-            if (confirm("{{$appName}} app is not installed. Would you like to download it from the app store?")) {
-                window.location.href = appStoreLink;
-            }
-        }
-    }, 1000);
+    {{--setTimeout(function () {--}}
+    {{--    if (!document.hidden && !document.webkitHidden) {--}}
+    {{--        if (confirm("{{$appName}} app is not installed. Would you like to download it from the app store?")) {--}}
+    {{--            window.location.href = appStoreLink;--}}
+    {{--        }--}}
+    {{--    }--}}
+    {{--}, 1000);--}}
 });
 </script>
 
