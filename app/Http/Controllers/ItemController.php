@@ -220,6 +220,9 @@ class ItemController extends Controller {
             
             // Update the item with all request data except is_featured (handle separately)
             $updateData = $request->except('is_featured');
+
+            $old_item_status_is_same_as_new_one = ($item->status == $request->status);
+
             $updateData['rejected_reason'] = ($request->status == "rejected") ? $request->rejected_reason : '';
             
             $item->update($updateData);
@@ -321,29 +324,31 @@ class ItemController extends Controller {
                     Log::info('Removed featured status:', ['item_id' => $id, 'deleted_count' => $deleted]);
                 }
             }
-            
-            // Send notifications
-            $user_token = UserFcmToken::where('user_id', $item->user->id)->pluck('fcm_token')->toArray();
-            
-            // Create notification in the database
-            $notificationTitle = 'About ' . $item->name;
-            $notificationMessage = "Your Item is " . ucfirst($request->status);
-            
-            // Create notification record
-            Notifications::create([
-                'title' => $notificationTitle,
-                'message' => $notificationMessage,
-                'item_id' => $item->id,
-                'user_id' => $item->user->id,
-                'send_to' => 'selected',
-                'image' => ''
-            ]);
-            
-            // Send FCM notification
-            if (!empty($user_token)) {
-                NotificationService::sendFcmNotification($user_token, $notificationTitle, $notificationMessage, "item-update", ['id' => $item->id]);
+
+            if(!$old_item_status_is_same_as_new_one) {
+
+                // Send notifications
+                $user_token = UserFcmToken::where('user_id', $item->user->id)->pluck('fcm_token')->toArray();
+
+                // Create notification in the database
+                $notificationTitle = 'About ' . $item->name;
+                $notificationMessage = "Your Item is " . ucfirst($request->status);
+
+                // Create notification record
+                Notifications::create([
+                    'title' => $notificationTitle,
+                    'message' => $notificationMessage,
+                    'item_id' => $item->id,
+                    'user_id' => $item->user->id,
+                    'send_to' => 'selected',
+                    'image' => ''
+                ]);
+                // Send FCM notification
+                if (!empty($user_token)) {
+                    NotificationService::sendFcmNotification($user_token, $notificationTitle, $notificationMessage, "item-update", ['id' => $item->id]);
+                }
+
             }
-            
             return ResponseService::successResponse('Item Updated Successfully');
         } catch (Throwable $th) {
             Log::error('Error in updateItemApproval:', ['exception' => $th->getMessage(), 'trace' => $th->getTraceAsString()]);

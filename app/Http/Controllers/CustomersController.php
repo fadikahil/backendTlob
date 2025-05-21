@@ -2,13 +2,16 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Notifications;
 use App\Models\Package;
 use App\Models\PaymentTransaction;
 use App\Models\Setting;
 use App\Models\User;
+use App\Models\UserFcmToken;
 use App\Models\UserPurchasedPackage;
 use App\Services\BootstrapTableService;
 use App\Services\HelperService;
+use App\Services\NotificationService;
 use App\Services\ResponseService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -476,6 +479,24 @@ class CustomersController extends Controller {
                 'status'                  => 1,
                 'payment_transactions_id' => $paymentTransaction->id,
             ]);
+
+            $token = UserFcmToken::where('user_id', $request->user_id)->first();
+            $notificationTitle = 'Package Assigned';
+            $notificationMessage = "Package assigned successfully";
+
+            // Create notification record
+            Notifications::create([
+                'title' => $notificationTitle,
+                'message' => $notificationMessage,
+                'item_id' => null,
+                'user_id' => $request->user_id,
+                'send_to' => 'selected',
+                'image' => ''
+            ]);
+
+            if($token) {
+                NotificationService::sendFcmNotification([$token->fcm_token], 'Package Assigned', 'Package assigned successfully', null, null);
+            }
             DB::commit();
             ResponseService::successResponse('Package assigned to user Successfully');
         } catch (Throwable $th) {

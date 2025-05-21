@@ -36,7 +36,7 @@
 @include('layouts.footer_script')
 <script>
 $(document).ready(function () {
-    let appScheme = 'eclassify://' + window.location.host + window.location.pathname;
+    let appScheme = 'tlobni://' + window.location.host + window.location.pathname;
     let androidAppStoreLink = '{{ $playStoreLink }}';
     let iosAppStoreLink = '{{ $appStoreLink }}';
     let userAgent = navigator.userAgent || navigator.vendor || window.opera;

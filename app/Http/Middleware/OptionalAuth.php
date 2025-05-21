@@ -12,10 +12,8 @@ class OptionalAuth
     {
         $token = $request->bearerToken();
 
-        ds($token);
         if ($token) {
             $accessToken = PersonalAccessToken::findToken($token);
-            ds($accessToken);
             if ($accessToken) {
                 $request->setUserResolver(fn () => $accessToken->tokenable);
             }

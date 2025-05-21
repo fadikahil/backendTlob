@@ -51,6 +51,7 @@ use App\Services\Payment\PaymentService;
 use App\Services\ResponseService;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
+use Illuminate\Database\Query\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -748,7 +749,7 @@ class ApiController extends Controller
         }
         try {
             //TODO : need to simplify this whole module
-            $sql = Item::with('user:id,name,email,mobile,profile,created_at,is_verified,show_personal_details,country_code,country,state,city,categories,gender', 'category:id,name,image', 'gallery_images:id,image,item_id', 'featured_items', 'favourites', 'item_custom_field_values.custom_field', 'area:id,name')
+            $sql = Item::with('user:*', 'category:id,name,image', 'gallery_images:id,image,item_id', 'featured_items', 'favourites', 'item_custom_field_values.custom_field', 'area:id,name')
                 ->withCount('favourites')
                 ->select('items.*')
                 ->whereHas('user')
@@ -836,6 +837,7 @@ class ApiController extends Controller
                 })->when($request->area_id, function ($sql) use ($request) {
                     return $sql->where('area_id', $request->area_id);
                 })->when($request->user_id, function ($sql) use ($request) {
+                    ds($request->user_id);
                     return $sql->where('user_id', $request->user_id);
                 })->when($request->slug, function ($sql) use ($request) {
                     return $sql->where('slug', $request->slug);
@@ -1040,6 +1042,8 @@ class ApiController extends Controller
             //                }
             //            }
             // Return success response with the fetched items
+
+            ds($sql->toSql());
 
             ResponseService::successResponse("Item Fetched Successfully", new ItemCollection($result));
         } catch (Throwable $th) {
@@ -2046,6 +2050,7 @@ class ApiController extends Controller
             /* message_type is reserved keyword in FCM so removed here*/
             unset($fcmMsg['message_type']);
             $receiverFCMTokens = UserFcmToken::where('user_id', $receiver_id)->pluck('fcm_token')->toArray();
+            ds($fcmMsg);
             $notification = NotificationService::sendFcmNotification($receiverFCMTokens, 'Message', $request->message, "chat", $fcmMsg);
 
             DB::commit();
@@ -2056,6 +2061,7 @@ class ApiController extends Controller
                 'line' => $th->getLine(),
                 'trace' => $th->getTraceAsString()
             ]);
+            ds($th);
             ResponseService::logErrorResponse($th, "API Controller -> getItem");
             ResponseService::errorResponse();
         }
@@ -2427,6 +2433,24 @@ class ApiController extends Controller
                 'review'    => $request->review ?? '',
             ]);
 
+            $notificationTitle = 'Review for ' . $item->name;
+            $notificationMessage = "A review was added for " . $item->name . " by " . Auth::user()->name;
+
+            // Create notification record
+            Notifications::create([
+                'title' => $notificationTitle,
+                'message' => $notificationMessage,
+                'item_id' => $item->id,
+                'user_id' => $item->user_id,
+                'send_to' => 'selected',
+                'image' => ''
+            ]);
+
+            $seller_fcm = UserFcmToken::where('user_id', $item->user_id)->pluck('fcm_token')->toArray();
+            if($seller_fcm) {
+                NotificationService::sendFcmNotification($seller_fcm, $notificationTitle, $notificationMessage, null, null);
+            }
+
             ResponseService::successResponse("Your review has been submitted successfully.", $review);
         } catch (Throwable $th) {
             ResponseService::logErrorResponse($th, 'API Controller -> storeContactUs');
@@ -2702,7 +2726,9 @@ class ApiController extends Controller
         }
 
         try {
-            $sql = Item::with('user:id,name,email,mobile,profile,created_at,is_verified,show_personal_details,country_code,country,state,city,categories,gender',
+            $currentDate = date('Y-m-d');
+            $currentTime = date('H:i:s');
+            $sql = Item::with('user:*',
                             'category:id,name,image',
                             'gallery_images:id,image,item_id',
                             'featured_items',
@@ -2713,6 +2739,8 @@ class ApiController extends Controller
                 ->select('items.*')
                 ->where('status', 'approved')
                 ->whereRaw("JSON_EXTRACT(special_tags, '$.exclusive_women') = 'true'");
+
+            $sql = $this->filterOutExpiredExperiences($sql);
 
             // Handle sorting
             if ($request->sort_by) {
@@ -2755,7 +2783,7 @@ class ApiController extends Controller
         }
 
         try {
-            $sql = Item::with('user:id,name,email,mobile,profile,created_at,is_verified,show_personal_details,country_code,country,state,city,categories,gender',
+            $sql = Item::with('user:*',
                             'category:id,name,image',
                             'gallery_images:id,image,item_id',
                             'featured_items',
@@ -2766,6 +2794,8 @@ class ApiController extends Controller
                 ->select('items.*')
                 ->where('status', 'approved')
                 ->whereRaw("JSON_EXTRACT(special_tags, '$.corporate_package') = 'true'");
+
+            $sql = $this->filterOutExpiredExperiences($sql);
 
             // Handle sorting
             if ($request->sort_by) {
@@ -2793,6 +2823,22 @@ class ApiController extends Controller
             Log::error('getCorporatePackageItems error: ' . $e->getMessage());
             return ResponseService::errorResponse('Something went wrong');
         }
+    }
+
+    private function filterOutExpiredExperiences(\Illuminate\Contracts\Database\Eloquent\Builder $sql) : \Illuminate\Contracts\Database\Eloquent\Builder {
+        $currentDate = date('Y-m-d');
+        $currentTime = date('H:i:s');
+        // Not expired items:
+        // 1. expiration_date is in the future, OR
+        // 2. expiration_date is today but expiration_time hasn't passed yet, OR
+        // 3. expiration_date is null (no expiration)
+        return $sql->where(function($q) use ($currentDate, $currentTime) {
+            $q->where('expiration_date', '>', $currentDate)
+                ->orWhere(function($innerQ) use ($currentDate, $currentTime) {
+                    $innerQ->where('expiration_date', '=', $currentDate)
+                        ->where('expiration_time', '>', $currentTime);
+                })->orWhereNull('expiration_date');
+        });
     }
 
     private function applySorting($query, $sortBy)
@@ -2840,7 +2886,7 @@ class ApiController extends Controller
             $currentDate = date('Y-m-d');
             $currentTime = date('H:i:s');
 
-            $sql = Item::with('user:id,name,email,mobile,profile,created_at,is_verified,show_personal_details,country_code,country,state,city,categories,gender',
+            $sql = Item::with('user:*',
                             'category:id,name,image',
                             'gallery_images:id,image,item_id',
                             'featured_items',
@@ -2856,24 +2902,15 @@ class ApiController extends Controller
                           ->orWhere('provider_item_type', '=', 'Experience')
                           ->orWhere('provider_item_type', 'LIKE', '%experience%')
                           // Check various potential JSON keys in special_tags
-                          ->orWhereRaw("JSON_EXTRACT(special_tags, '$.is_experience') = ?", ['true'])
-                          ->orWhereRaw("JSON_EXTRACT(special_tags, '$.experience') = ?", ['true'])
-                          ->orWhereRaw("JSON_EXTRACT(special_tags, '$.exclusive_experience') = ?", ['true']);
-                })
-                ->where(function($query) use ($currentDate, $currentTime) {
-                    // Not expired items:
-                    // 1. expiration_date is in the future, OR
-                    // 2. expiration_date is today but expiration_time hasn't passed yet, OR
-                    // 3. expiration_date is null (no expiration)
-                    $query->where(function($q) use ($currentDate, $currentTime) {
-                            $q->where('expiration_date', '>', $currentDate)
-                              ->orWhere(function($innerQ) use ($currentDate, $currentTime) {
-                                  $innerQ->where('expiration_date', '=', $currentDate)
-                                         ->where('expiration_time', '>', $currentTime);
-                              });
-                          })
-                          ->orWhereNull('expiration_date');
+//                          ->orWhereRaw("JSON_EXTRACT(special_tags, '$.is_experience') = ?", ['true'])
+//                          ->orWhereRaw("JSON_EXTRACT(special_tags, '$.experience') = ?", ['true'])
+//                          ->orWhereRaw("JSON_EXTRACT(special_tags, '$.exclusive_experience') = ?", ['true'])
+                    ;
                 });
+
+            $sql = $this->filterOutExpiredExperiences($sql);
+
+            ds($sql->toSql());
 
             // For testing, let's see items without filtering by status first
             $unfilteredCount = $sql->count();
@@ -2928,7 +2965,7 @@ class ApiController extends Controller
         }
 
         try {
-            $sql = Item::with('user:id,name,email,mobile,profile,created_at,is_verified,show_personal_details,country_code,country,state,city,categories,gender',
+            $sql = Item::with('user:*',
                             'category:id,name,image',
                             'gallery_images:id,image,item_id',
                             'featured_items',
@@ -2940,11 +2977,14 @@ class ApiController extends Controller
                 ->where('status', 'approved')
                 ->orderBy('created_at', 'desc'); // Always sort by newest first
 
+            $sql = $this->filterOutExpiredExperiences($sql);
+
             // Apply pagination
             $total = $sql->count();
             $items = $sql->skip($request->offset ?? 0)
                 ->take($request->limit ?? 10)
                 ->get();
+
 
             // Process each item
             foreach ($items as $item) {
@@ -3026,6 +3066,51 @@ class ApiController extends Controller
             ResponseService::successResponse("Review submitted successfully.", $review);
         } catch (Throwable $th) {
             ResponseService::logErrorResponse($th, "API Controller -> addUserReview");
+            ResponseService::errorResponse();
+        }
+    }
+
+    public function userHasRatedItem(Request $request) {
+        $validator = Validator::make($request->all(), [
+            'item_id' => 'required|integer|exists:items,id',
+            'user_id' => 'required|integer|exists:users,id',
+        ]);
+
+        if ($validator->fails()) {
+            ResponseService::validationError($validator->errors());
+        }
+        try {
+            $userHasRatedItem = ServiceReview::where('service_id', $request->item_id)
+                ->where('reviewer_id', $request->user_id)
+                ->first();
+            ResponseService::successResponse('User rating status for item has been retrieved successfully.', [
+                'result' => $userHasRatedItem !== null,
+            ]);;
+        } catch (Throwable $th) {
+            ResponseService::logErrorResponse($th, "API Controller -> userHasRatedItem");
+            ResponseService::errorResponse();
+        }
+    }
+
+
+    public function userHasRatedUser(Request $request) {
+        $validator = Validator::make($request->all(), [
+            'rated_user_id' => 'required|integer|exists:users,id',
+            'user_id' => 'required|integer|exists:users,id',
+        ]);
+        if ($validator->fails()) {
+            ResponseService::validationError($validator->errors());
+        }
+        try {
+            $user_has_rated_user = UserReview::where('user_id', $request->rated_user_id)
+                ->where('reviewer_id', $request->user_id)
+                ->first();
+            ResponseService::successResponse('User rating status for user has been retrieved successfully.', [
+                'result' => $user_has_rated_user !== null,
+            ]);;
+        } catch (Throwable $th) {
+            ds($th);
+            ResponseService::logErrorResponse($th, "API Controller -> userHasRatedItem");
             ResponseService::errorResponse();
         }
     }
@@ -3142,17 +3227,12 @@ class ApiController extends Controller
             // Calculate average rating
             $averageRating = UserReview::where('user_id', $request->user_id)->avg('ratings');
 
-            $current_user_has_rated = false;
-            if (Auth::user() !== null) {
-                $current_user_id = Auth::id();
-                $current_user_has_rated = UserReview::where('reviewer_id', $current_user_id)->exists();
-                ds($current_user_id);
-            }
+            $seller = User::with('roles:id,name')->where('id', $request->user_id)->first();
 
             $response = [
                 'reviews' => $reviews,
                 'average_rating' => $averageRating,
-                'current_user_has_rated' => $current_user_has_rated,
+                'seller' => $seller,
             ];
 
             ResponseService::successResponse("Success", $response);
@@ -3616,7 +3696,12 @@ class ApiController extends Controller
             // Only get active users
             $query->where('status', 1);
 
-            $result = $query->paginate($request->limit ?? 15);
+            $result = $query->paginate($request->limit ?? 15)->through(function ($user) {
+                $categoriesIds = explode(',', $user->categories);
+                $categories = Category::whereIn('id', $categoriesIds)->get();
+                $user->categories_models = $categories;
+                return $user;
+            });
 
             return ResponseService::successResponse('Users fetched successfully', $result);
         } catch (Throwable $th) {

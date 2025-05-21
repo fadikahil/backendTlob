@@ -19,9 +19,11 @@ class NotificationService {
      * @param array $customBodyFields
      * @return string|array|bool
      */
-    public static function sendFcmNotification(array $registrationIDs, string|null $title = '', string|null $message = '', string $type = "default", array $customBodyFields = []): string|array|bool {
+    public static function sendFcmNotification(array $registrationIDs, string|null $title = '', string|null $message = '', string|null $type = "default", array|null $customBodyFields = []): string|array|bool {
         try {
-            ds($title);
+            ds(collect($registrationIDs)->unique());
+            $customBodyFields = $customBodyFields ?? [];
+            $type = $type ?? 'default';
             //TODO : Use this from caching
             $project_id = Setting::select('value')->where('name', 'firebase_project_id')->first();
             if (empty($project_id->value)) {
@@ -54,6 +56,7 @@ class NotificationService {
                 "body"  => $message,
                 "type"  => $type,
             ];
+            ds($message);
             foreach (collect($registrationIDs)->unique() as $registrationID) {
                 $platform = $deviceInfo->first(function ($q) use ($registrationID) {
                     return $q->fcm_token == $registrationID;
@@ -70,7 +73,7 @@ class NotificationService {
                                 "aps" => [
                                     "alert" => [
                                         "title" => $title,
-                                        "body"  => $message,
+                                        "body"  => $message ?? '',
                                     ],
                                 ]
                             ]
@@ -113,12 +116,14 @@ class NotificationService {
                 }
                 curl_close($ch);
             }
+            ds($result);
             return [
                 'error'   => false,
                 'message' => "Success",
                 'data'    => $result
             ];
         } catch (Throwable $th) {
+            ds($th);
             throw new RuntimeException($th);
         }
     }

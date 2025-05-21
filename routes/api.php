@@ -57,10 +57,12 @@ Route::group(['middleware' => ['auth:sanctum', 'auth.status', 'auth.optional']],
     Route::post('add-item-review', [ApiController::class, 'addItemReview']);
     Route::get('my-review', [ApiController::class, 'getMyReview']);
     Route::post('add-review-report', [ApiController::class, 'addReviewReport']);
+    Route::get('user-has-rated-item', [ApiController::class, 'userHasRatedItem']);
 
     // New review endpoints
     Route::post('add-user-review', [ApiController::class, 'addUserReview']);
     Route::post('add-service-review', [ApiController::class, 'addServiceReview']);
+    Route::get('user-has-rated-user', [ApiController::class, 'userHasRatedUser']);
 
 
     Route::get('verification-fields', [ApiController::class, 'getVerificationFields']);
