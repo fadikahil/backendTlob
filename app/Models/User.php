@@ -143,7 +143,7 @@ class User extends Authenticatable
     }
 
     public function featured_users() {
-        return $this->hasMany(FeaturedUsers::class)->onlyActive();
+        return $this->hasMany(FeaturedUsers::class);
     }
 
     public function getStatusAttribute($value)
