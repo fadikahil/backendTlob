@@ -3477,11 +3477,11 @@ class ApiController extends Controller
                 ->select('users.*')
                 ->whereHas('featured_users', function($query) {
                     // Only get users with active featured entries
-                    $query->whereDate('start_date', '<=', date('Y-m-d'))
-                          ->where(function ($q) {
-                              $q->whereDate('end_date', '>=', date('Y-m-d'))
-                                ->orWhereNull('end_date');
-                          });
+//                    $query->whereDate('start_date', '<=', date('Y-m-d'))
+//                          ->where(function ($q) {
+//                              $q->whereDate('end_date', '>=', date('Y-m-d'))
+//                                ->orWhereNull('end_date');
+//                          });
                 });
 
             // Log the initial query
