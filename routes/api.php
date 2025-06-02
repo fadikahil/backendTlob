@@ -71,10 +71,13 @@ Route::group(['middleware' => ['auth:sanctum', 'auth.status', 'auth.optional']],
 
     // Featured users
     Route::post('make-user-featured', [ApiController::class, 'makeUserFeatured']);
+
+    Route::get('get-item-authenticated', [ApiController::class, 'getItem']);
 });
 
 /* Non Authenticated Routes */
 Route::middleware('auth.optional')->get('user-review', [ApiController::class, 'getUserReview']);
+Route::get('get-provider', [ApiController::class, 'getProvider']);
 Route::get('item-review', [ApiController::class, 'getItemReview']);
 Route::post('login', [ApiController::class, 'login']);
 Route::get('get-package', [ApiController::class, 'getPackage']);

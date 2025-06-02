@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Models\Category;
 use Illuminate\Contracts\Support\Arrayable;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\ResourceCollection;
@@ -25,6 +26,7 @@ class ItemCollection extends ResourceCollection {
             foreach ($this->collection as $key => $collection) {
                 /* NOTE : This code can be improved */
                 $response[$key] = $collection->toArray();
+
                 if ($collection->status == "approved" && $collection->relationLoaded('featured_items')) {
                     $response[$key]['is_feature'] = count($collection->featured_items) > 0;
                 }else{
@@ -42,16 +44,18 @@ class ItemCollection extends ResourceCollection {
                         $response[$key]['is_liked'] = false;
                     }
                 }
-                if ($collection->relationLoaded('user') && !is_null($collection->user)) {
-
+                if (!is_null($collection->user)) {
                     $response[$key]['user'] = $collection->user;
-                    $response[$key]['user']['reviews_count'] = $collection->user->sellerReview()->count();
-                    $response[$key]['user']['average_rating'] = $collection->user->sellerReview->avg('ratings');
+                    $response[$key]['user']['total_reviews'] = $collection->user_total_reviews;
+                    $response[$key]['user']['average_rating'] = $collection->user_average_rating;
+                    $response[$key]['user']['is_featured'] = $collection->is_user_featured;
+                    $category_ids = explode(',', $collection->user->categories);
+                    $categories = Category::whereIn('id', $category_ids)->get();
+                    $response[$key]['user']['categories_array'] = $categories->toArray();
                     if ($collection->user->show_personal_details == 0) {
                         $response[$key]['user']['mobile'] = '';
                         $response[$key]['user']['country_code'] = '';
                         $response[$key]['user']['email'] = '';
-
                     }
                 }
                 /*** Custom Fields ***/
@@ -94,8 +98,9 @@ class ItemCollection extends ResourceCollection {
                 }
 
                 /*** User Reports ***/
-                if ($collection->relationLoaded('user_reports') && Auth::check()) {
+                if (Auth::check()) {
                     $response[$key]['is_already_reported'] = $collection->user_reports->where('user_id', Auth::user()->id)->count() > 0;
+                    ds(Auth::user()->id . ' '. $collection->id. ' ' . $collection->name . ' '. $response[$key]['is_already_reported']);
                 } else {
                     $response[$key]['is_already_reported'] = false;
                 }
@@ -106,22 +111,22 @@ class ItemCollection extends ResourceCollection {
                     $response[$key]['is_purchased'] = 0;
                 }
             }
-            $featuredRows = [];
-            $normalRows = [];
-
-            foreach ($response as $key => $value) {
-                // ... (Your existing code here)
-                // Extracting is_feature condition and processing accordingly
-                if ($value['is_feature']) {
-                    $featuredRows[] = $value;
-                } else {
-                    $normalRows[] = $value;
-                }
-            }
-
-
-            // Merge the featured rows first and then the normal rows
-            $response = array_merge($featuredRows, $normalRows);
+//            $featuredRows = [];
+//            $normalRows = [];
+//
+//            foreach ($response as $key => $value) {
+//                // ... (Your existing code here)
+//                // Extracting is_feature condition and processing accordingly
+//                if ($value['is_feature']) {
+//                    $featuredRows[] = $value;
+//                } else {
+//                    $normalRows[] = $value;
+//                }
+//            }
+//
+//
+//            // Merge the featured rows first and then the normal rows
+//            $response = array_merge($featuredRows, $normalRows);
             $totalCount = count($response);
             if ($this->resource instanceof AbstractPaginator) {
                 //If the resource has a paginated collection then we need to copy the pagination related params and actual item details data will be copied to data params

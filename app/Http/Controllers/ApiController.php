@@ -107,7 +107,8 @@ class ApiController extends Controller
             'getExperienceItems',
             'getNewestItems',
             'getFeaturedItems',
-            'getFeaturedUsers'
+            'getFeaturedUsers',
+            'getProvider',
         ]);
     }
 
@@ -736,7 +737,7 @@ class ApiController extends Controller
             'gender'            => 'nullable|in:Male,Female',
             'user_type'         => 'nullable|in:business,expert',
             'provider_item_type' => 'nullable|in:service,experience',
-            'sort_by'           => 'nullable|in:new-to-old,old-to-new,price-high-to-low,price-low-to-high,popular_items',
+            'sort_by'           => 'nullable|in:new-to-old,old-to-new,price-high-to-low,price-low-to-high,popular_items,top_rated',
             'posted_since'      => 'nullable|in:all-time,today,within-1-week,within-2-week,within-1-month,within-3-month',
             'rating_from'  => 'nullable|numeric|min:0|max:5',
             'rating_to'    => 'nullable|numeric|min:0|max:5',
@@ -752,6 +753,14 @@ class ApiController extends Controller
             $sql = Item::with('user:*', 'category:id,name,image', 'gallery_images:id,image,item_id', 'featured_items', 'favourites', 'item_custom_field_values.custom_field', 'area:id,name')
                 ->withCount('favourites')
                 ->select('items.*')
+                ->addSelect(
+                    DB::raw('AVG(user_reviews.ratings) as user_average_rating'),
+                    DB::raw('COUNT(user_reviews.id) as user_total_reviews'),
+                    DB::raw('COUNT(featured_users.id) > 0 as is_user_featured')
+                )
+                ->leftJoin('user_reviews', 'items.user_id', '=', 'user_reviews.user_id')
+                ->leftJoin('featured_users', 'items.user_id', '=', 'featured_users.user_id')
+                ->groupBy('items.id')
                 ->whereHas('user')
                 ->when($request->id, function ($sql) use ($request) {
                     $sql->where('id', $request->id);
@@ -838,7 +847,7 @@ class ApiController extends Controller
                     return $sql->where('area_id', $request->area_id);
                 })->when($request->user_id, function ($sql) use ($request) {
                     ds($request->user_id);
-                    return $sql->where('user_id', $request->user_id);
+                    return $sql->where('items.user_id', $request->user_id);
                 })->when($request->slug, function ($sql) use ($request) {
                     return $sql->where('slug', $request->slug);
                 })->when($request->provider_item_type, function ($sql) use ($request) {
@@ -905,6 +914,9 @@ class ApiController extends Controller
             //                $sql->where('status', 'approved');
             //            }
 
+            $sql->orderByDesc(DB::raw('exists(select * from featured_items where featured_items.item_id = items.id)'));
+
+
             // Sort By
             if ($request->sort_by == "new-to-old") {
                 $sql->orderBy('id', 'DESC');
@@ -916,7 +928,13 @@ class ApiController extends Controller
                 $sql->orderBy('price', 'ASC');
             } elseif ($request->sort_by == "popular_items") {
                 $sql->orderBy('clicks', 'DESC');
-            } else {
+            } elseif($request->sort_by == "top_rated") {
+                $sql->leftJoin('service_reviews', 'items.id', '=', 'service_reviews.service_id')
+                    ->select('items.*', DB::raw('AVG(service_reviews.ratings) as average_rating'))
+                    ->groupBy('items.id')
+                    ->orderByDesc('average_rating');
+            }
+            else {
                 $sql->orderBy('id', 'DESC');
             }
 
@@ -1008,7 +1026,7 @@ class ApiController extends Controller
                 $currentURI = explode('?', $request->getRequestUri(), 2);
 
                 if ($currentURI[0] == "/api/my-items") { //TODO: This if condition is temporary fix. Need something better
-                    $sql->where(['user_id' => Auth::user()->id])->withTrashed();
+                    $sql->where(['items.user_id' => Auth::user()->id])->withTrashed();
                 } else {
                     $sql->where('status', 'approved')->has('user')->onlyNonBlockedUsers()->getNonExpiredItems();
                 }
@@ -1043,7 +1061,7 @@ class ApiController extends Controller
             //            }
             // Return success response with the fetched items
 
-            ds($sql->toSql());
+//            ds($sql->toSql());
 
             ResponseService::successResponse("Item Fetched Successfully", new ItemCollection($result));
         } catch (Throwable $th) {
@@ -2759,6 +2777,7 @@ class ApiController extends Controller
             foreach ($items as $item) {
                 $this->determineSpecialTags($item);
             }
+            ds($items);
 
             return ResponseService::successResponse('Items retrieved successfully', [
                 'items' => $items,
@@ -3105,6 +3124,7 @@ class ApiController extends Controller
             $user_has_rated_user = UserReview::where('user_id', $request->rated_user_id)
                 ->where('reviewer_id', $request->user_id)
                 ->first();
+            ds($user_has_rated_user);
             ResponseService::successResponse('User rating status for user has been retrieved successfully.', [
                 'result' => $user_has_rated_user !== null,
             ]);;
@@ -3176,6 +3196,8 @@ class ApiController extends Controller
     {
         $validator = Validator::make($request->all(), [
             'service_id' => 'required|integer|exists:items,id',
+            'offset' => 'nullable|integer',
+            'limit' => 'nullable|integer',
         ]);
 
         if ($validator->fails()) {
@@ -3188,15 +3210,13 @@ class ApiController extends Controller
                                     ->with(['reviewer:id,name,profile'])
                                     ->paginate(10);
 
-            // Calculate average rating
-            $averageRating = $reviews->avg('ratings');
+            $result = ServiceReview::where('service_id', $request->service_id)
+                                    ->selectRaw('AVG(ratings) as average_rating')
+                                    ->get()
+                                    ->first();
+            $average_rating = (float) $result->average_rating;
 
-            $response = [
-                'reviews' => $reviews,
-                'average_rating' => $averageRating,
-            ];
-
-            Log::info($response);
+            $response = compact('reviews', 'average_rating');;
 
             ResponseService::successResponse("Reviews fetched successfully.", $response);
         } catch (Throwable $th) {
@@ -3231,7 +3251,7 @@ class ApiController extends Controller
 
             $response = [
                 'reviews' => $reviews,
-                'average_rating' => $averageRating,
+                'average_rating' => (float) $averageRating,
                 'seller' => $seller,
             ];
 
@@ -3474,7 +3494,15 @@ class ApiController extends Controller
                     'featured_users',
                     'roles'
                 ])
-                ->select('users.*')
+                ->leftJoin('featured_users', 'users.id', '=', 'featured_users.user_id')
+                ->leftJoin('user_reviews', 'users.id', '=', 'user_reviews.user_id')
+                ->select('users.*',
+                    DB::raw('AVG(user_reviews.ratings) as average_rating'),
+                    DB::raw('COUNT(user_reviews.id) as total_reviews'),
+                    DB::raw('count(featured_users.id) > 0 as is_featured')
+                )
+                ->groupBy('users.id')
+//                ->select('users.*')
                 ->whereHas('featured_users', function($query) {
                     // Only get users with active featured entries
 //                    $query->whereDate('start_date', '<=', date('Y-m-d'))
@@ -3482,7 +3510,7 @@ class ApiController extends Controller
 //                              $q->whereDate('end_date', '>=', date('Y-m-d'))
 //                                ->orWhereNull('end_date');
 //                          });
-                });
+                })->orderByDesc(DB::raw('AVG(user_reviews.ratings)'));
 
             // Log the initial query
             Log::info('Featured users initial query built');
@@ -3498,10 +3526,12 @@ class ApiController extends Controller
                 });
                 Log::info('Filtering by Business and Expert roles');
             }
+            ds($sql->toSql());
 
             // Apply pagination
             $total = $sql->count();
             Log::info('Found ' . $total . ' featured users');
+
 
             $users = $sql->skip($request->offset ?? 0)
                 ->take($request->limit ?? 10)
@@ -3575,6 +3605,9 @@ class ApiController extends Controller
                     }
                 }
 
+                $userData['average_rating'] = $user->average_rating;
+                $userData['total_reviews'] = $user->total_reviews;
+
                 $processedUsers[] = $userData;
             }
 
@@ -3588,6 +3621,41 @@ class ApiController extends Controller
         } catch (Throwable $th) {
             Log::error('Error in getFeaturedUsers: ' . $th->getMessage());
             ResponseService::logErrorResponse($th, "API Controller -> getFeaturedUsers");
+            return ResponseService::errorResponse();
+        }
+    }
+
+    public function getProvider(Request $request)
+    {
+        Log::info('Getting provider request: '. json_encode($request->all()));
+        $validator = Validator::make($request->all(), [
+            'id' => 'required|integer'
+        ]);
+
+        if($validator->fails()) {
+            return ResponseService::validationError($validator->errors()->first());
+        }
+        try {
+            $user = User::with(['roles:id,name'])
+                ->leftJoin('featured_users', 'users.id', '=', 'featured_users.user_id')
+                ->leftJoin('user_reviews', 'users.id', '=', 'user_reviews.user_id')
+                ->select('users.*', DB::raw('AVG(user_reviews.ratings) as average_rating, count(user_reviews.id) as total_reviews'), DB::raw('count(featured_users.id) > 0 as is_featured'))
+                ->groupBy('users.id')
+                ->whereNotNull('type')
+                ->where('users.id', $request->id)
+                ->where('status', 1)
+                ->get()
+                ->first();
+
+            $categoriesIds = explode(',', $user->categories);
+            $categories = Category::whereIn('id', $categoriesIds)->get();
+            ds($categories);
+            $user->categories_models = $categories;
+            $user->categories_array = $categories;
+
+            return ResponseService::successResponse('Provider fetched successfully', $user);
+        }catch (Throwable $th) {
+            ResponseService::logErrorResponse($th, 'API Controller -> getProvider');
             return ResponseService::errorResponse();
         }
     }
@@ -3608,7 +3676,8 @@ class ApiController extends Controller
             'rating_from'  => 'nullable|numeric|min:0|max:5',
             'rating_to'    => 'nullable|numeric|min:0|max:5',
             'search'        => 'nullable|string',
-            'sort_by'      => 'nullable|in:name-asc,name-desc,newest,oldest'
+            'sort_by'      => 'nullable|in:name-asc,name-desc,newest,oldest,rating',
+            'featured_only' => 'nullable|string',
         ]);
 
         if ($validator->fails()) {
@@ -3617,7 +3686,10 @@ class ApiController extends Controller
 
         try {
             $query = User::with(['roles:id,name'])
-                ->select('users.*')
+                ->leftJoin('featured_users', 'users.id', '=', 'featured_users.user_id')
+                ->leftJoin('user_reviews', 'users.id', '=', 'user_reviews.user_id')
+                ->select('users.*', DB::raw('AVG(user_reviews.ratings) as average_rating, count(user_reviews.id) as total_reviews'), DB::raw('count(featured_users.id) > 0 as is_featured'))
+                ->groupBy('users.id')
                 ->whereNotNull('type')
                 ->when($request->id, function ($query) use ($request) {
                     return $query->where('id', $request->id);
@@ -3648,6 +3720,11 @@ class ApiController extends Controller
                           ->orWhereRaw('FIND_IN_SET(?, categories)', [$categoryId]);
                     });
                 })
+                ->when($request->featured_only, function ($query) use ($request) {
+                    if($request->featured_only === 'true') {
+                        return $query->whereRaw('exists (select * from featured_users where featured_users.user_id = users.id)');
+                    }
+                })
                 ->when($request->type, function ($query) use ($request) {
                     $userType = $request->type;
                     return $query->where(function($subQuery) use ($userType) {
@@ -3665,11 +3742,10 @@ class ApiController extends Controller
                     $ratingFrom = $request->rating_from ?? 0;
                     $ratingTo = $request->rating_to ?? 5;
 
-                    return $query->leftJoin('user_reviews', 'users.id', '=', 'user_reviews.user_id')
-                        ->select('users.*', DB::raw('AVG(user_reviews.ratings) as average_rating'))
-                        ->groupBy('users.id')
-                        ->havingRaw('(average_rating >= ? AND average_rating <= ?) OR ((average_rating IS NULL) and ? = 0)', [$ratingFrom, $ratingTo, $ratingFrom]);
+                    return $query->havingRaw('(average_rating >= ? AND average_rating <= ?) OR ((average_rating IS NULL) and ? = 0)', [$ratingFrom, $ratingTo, $ratingFrom]);
                 });
+
+            $query->orderByDesc('is_featured');
 
             // Apply sorting
             if ($request->sort_by) {
@@ -3685,6 +3761,9 @@ class ApiController extends Controller
                         break;
                     case 'oldest':
                         $query->orderBy('created_at', 'ASC');
+                        break;
+                    case 'rating':
+                        $query->orderBy('average_rating', 'DESC');
                         break;
                     default:
                         $query->orderBy('name', 'ASC');

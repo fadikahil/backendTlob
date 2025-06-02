@@ -70,7 +70,7 @@ class Item extends Model {
     }
 
     public function featured_items() {
-        return $this->hasMany(FeaturedItems::class)->onlyActive();
+        return $this->hasMany(FeaturedItems::class);
     }
 
     public function favourites() {

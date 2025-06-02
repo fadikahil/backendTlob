@@ -114,7 +114,6 @@ class CustomersController extends Controller {
         $rows = array();
         $no = 1;
         foreach ($result as $row) {
-            ds($row);
             $tempRow = $row->toArray();
             $tempRow['no'] = $no++;
             
@@ -851,6 +850,8 @@ class CustomersController extends Controller {
                 'has_featured_entry' => !empty($existingFeatured),
                 'entry_id' => $existingFeatured->id ?? null
             ]);
+
+            ds($request->is_featured);
             
             if ($request->is_featured) {
                 // Check if an entry already exists in featured_users
@@ -861,7 +862,7 @@ class CustomersController extends Controller {
                             $q->where('type', 'advertisement');
                         })
                         ->first();
-                    
+
                     // If no package found for admin, get first advertisement package in the system
                     if (!$userPackage) {
                         Log::warning('No valid user purchased package found for featuring user:', ['user_id' => $request->user_id]);
