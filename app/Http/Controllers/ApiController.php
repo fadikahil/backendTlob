@@ -567,7 +567,7 @@ class ApiController extends Controller
 
             // Determine provider_item_type based on post_type parameter
             $providerItemType = 'service'; // Default value
-            if ($request->post_type === 'PostType.experience') {
+            if ($request->post_type === 'experience') {
                 $providerItemType = 'experience';
             }
 
