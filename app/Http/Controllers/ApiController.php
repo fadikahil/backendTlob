@@ -2756,6 +2756,7 @@ class ApiController extends Controller
                 ->withCount('favourites')
                 ->select('items.*')
                 ->where('status', 'approved')
+                ->where('provider_item_type', 'service')
                 ->whereRaw("JSON_EXTRACT(special_tags, '$.exclusive_women') = 'true'");
 
             $sql = $this->filterOutExpiredExperiences($sql);
@@ -2812,6 +2813,7 @@ class ApiController extends Controller
                 ->withCount('favourites')
                 ->select('items.*')
                 ->where('status', 'approved')
+                ->where('provider_item_type', 'service')
                 ->whereRaw("JSON_EXTRACT(special_tags, '$.corporate_package') = 'true'");
 
             $sql = $this->filterOutExpiredExperiences($sql);
