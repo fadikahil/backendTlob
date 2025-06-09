@@ -3717,6 +3717,9 @@ class ApiController extends Controller
                 ->when($request->id, function ($query) use ($request) {
                     return $query->where('id', $request->id);
                 })
+                ->when(!($request->id), function ($query) use ($request) {
+                    return $query->whereIn('type', ['Expert', 'Business']);
+                })
                 ->when($request->gender, function ($query) use ($request) {
                     // Convert both DB value and request value to lowercase for case-insensitive comparison
                     return $query->whereRaw('LOWER(gender) = ?', [strtolower($request->gender)]);
