@@ -469,6 +469,10 @@ class ApiController extends Controller
         }
     }
 
+    public function deleteAccount(Request $request) {
+        return 'To delete your account, navigate to the app, login, go to profile, and press on delete account. This deletes all your data including listings, reviews ...';
+    }
+
     public function assignFreePackage(Request $request)
     {
         try {

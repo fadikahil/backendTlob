@@ -113,3 +113,5 @@ Route::get('corporate-package-items', [ApiController::class, 'getCorporatePackag
 Route::get('newest-items', [ApiController::class, 'getNewestItems']);
 Route::get('featured-items', [ApiController::class, 'getFeaturedItems']);
 Route::get('featured-users', [ApiController::class, 'getFeaturedUsers']);
+
+Route::get('delete-account', [ApiController::class, 'deleteAccount']);
