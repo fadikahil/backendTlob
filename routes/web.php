@@ -415,6 +415,10 @@ Route::get('auto-translate/{id}/{type}/{locale}', function ($id, $type, $locale)
     }
 })->name('auto-translate');
 
+Route::get('delete-account', function () {
+    return 'To delete your account, navigate to the app, login, go to profile, and press on delete account. This deletes all your data including listings, reviews ...';
+});
+
 Route::get('/test-log', function () {
     Log::info('Testing Laravel Log');
 
