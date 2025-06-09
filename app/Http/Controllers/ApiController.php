@@ -917,7 +917,7 @@ class ApiController extends Controller
                     $ratingFrom = $request->rating_from ?? 0;
                     $ratingTo = $request->rating_to ?? 5;
 
-                    return $query->leftJoin('user_reviews', 'items.user_id', '=', 'user_reviews.user_id')
+                    return $query
                         ->select('items.*', DB::raw('AVG(user_reviews.ratings) as average_rating'))
                         ->groupBy('items.id')
                         ->havingRaw('(average_rating >= ? AND average_rating <= ?) OR ((average_rating IS NULL) and ? = 0)', [$ratingFrom, $ratingTo, $ratingFrom]);
