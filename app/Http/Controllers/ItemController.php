@@ -332,7 +332,7 @@ class ItemController extends Controller {
 
                 // Create notification in the database
                 $notificationTitle = 'About ' . $item->name;
-                $notificationMessage = "Your Item is " . ucfirst($request->status);
+                $notificationMessage = "Your Listing is " . ucfirst($request->status);
 
                 // Create notification record
                 Notifications::create([

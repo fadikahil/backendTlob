@@ -42,6 +42,7 @@ class Item extends Model {
         'expiry_date',
         'expiration_date',
         'expiration_time',
+        'for_a_cause_text'
     ];
 
     // Relationships

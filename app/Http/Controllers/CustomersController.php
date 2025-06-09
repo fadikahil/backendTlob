@@ -480,8 +480,8 @@ class CustomersController extends Controller {
             ]);
 
             $token = UserFcmToken::where('user_id', $request->user_id)->first();
-            $notificationTitle = 'Package Assigned';
-            $notificationMessage = "Package assigned successfully";
+            $notificationTitle = 'Account Activated Successfully';
+            $notificationMessage = "You're in! Start posting your listings now!";
 
             // Create notification record
             Notifications::create([
@@ -494,7 +494,7 @@ class CustomersController extends Controller {
             ]);
 
             if($token) {
-                NotificationService::sendFcmNotification([$token->fcm_token], 'Package Assigned', 'Package assigned successfully', null, null);
+                NotificationService::sendFcmNotification([$token->fcm_token], $notificationTitle, $notificationMessage, null, null);
             }
             DB::commit();
             ResponseService::successResponse('Package assigned to user Successfully');

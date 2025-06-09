@@ -61,6 +61,7 @@
                             <th scope="col" data-field="country" data-align="center" data-sortable="true" data-visible="true">{{ __('Country') }}</th>
                             <th scope="col" data-field="state" data-align="center" data-sortable="true" data-visible="true">{{ __('State') }}</th>
                             <th scope="col" data-field="city" data-align="center" data-sortable="true" data-visible="true">{{ __('City') }}</th>
+                            <th scope="col" data-field="for_a_cause_text" data-align="center" data-sortable="true" data-visible="true">{{ __('Philanthropic Description') }}</th>
                             <th scope="col" data-field="featured_items" data-formatter="featuredFormatter" data-align="center">{{ __('Featured/Premium') }}</th>
                             <th scope="col" data-field="status" data-align="center" data-sortable="true" data-filter-control="select" data-filter-data="" data-escape="false" data-formatter="itemStatusFormatter">{{ __('Status') }}</th>
                             <th scope="col" data-field="rejected_reason" data-sortable="true" data-visible="true">{{ __('Rejected Reason') }}</th>

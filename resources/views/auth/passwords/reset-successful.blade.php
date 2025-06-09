@@ -26,7 +26,7 @@
                     <div class="col-md-12">
                         <div class="card">
                             <div class="card-body">
-                                <h1>Password reset successful</h1>
+                                <h1>Your new password is set — open the app and log in to continue!</h1>
                             </div>
                         </div>
                     </div>

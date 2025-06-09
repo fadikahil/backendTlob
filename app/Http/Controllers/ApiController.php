@@ -3,6 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Http\Resources\ItemCollection;
+use App\Mail\PostListingNotificationEmail;
+use App\Mail\RegistrationNotificationEmail;
+use App\Mail\ReportNotificationEmail;
 use App\Models\Area;
 use App\Models\BlockUser;
 use App\Models\Blog;
@@ -49,7 +52,9 @@ use App\Services\HelperService;
 use App\Services\NotificationService;
 use App\Services\Payment\PaymentService;
 use App\Services\ResponseService;
+use App\Services\SendNotificationEmailService;
 use Carbon\Carbon;
+use Illuminate\Auth\Listeners\SendEmailVerificationNotification;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Http\Request;
@@ -229,7 +234,7 @@ class ApiController extends Controller
                 'phone'         => $request->phone,
                 'platform_type' => $request->platform_type,
                 'country_code'  => $request->country_code,
-                'type'          => $request->providerType, // Set type to 'email' by default
+                'type'          => $request->userType == 'Client' ? 'Client' :  $request->providerType, // Set type to 'email' by default
                 'profile'       => $request->hasFile('profile')
                     ? $request->file('profile')->store('user_profile', 'public')
                     : null,
@@ -283,6 +288,8 @@ class ApiController extends Controller
             // Get the user's role
             $user->getRoleNames()->first();
 
+            SendNotificationEmailService::send(new RegistrationNotificationEmail($user->name));
+
             return response()->json([
                 'status' => true,
                 'token' => $token,
@@ -307,7 +314,7 @@ class ApiController extends Controller
                 'address'               => 'nullable',
                 'show_personal_details' => 'boolean',
                 'country_code'          => 'nullable|string',
-                'gender'                => 'nullable|in:Male,Female,Other',
+                'gender'                => 'nullable|in:Male,Female',
                 'country'               => 'nullable|string', // Keep for backward compatibility
                 'state'               => 'nullable|string', // Keep for backward compatibility
                 'city'               => 'nullable|string', // Keep for backward compatibility
@@ -339,6 +346,10 @@ class ApiController extends Controller
 
             if (!empty($request->phone)) {
                 $data['mobile'] = $request->phone;
+            }
+
+            if(!empty($request->gender)) {
+                $data['gender'] = $request->gender;
             }
 
             if (isset($request->categories)) {
@@ -557,6 +568,7 @@ class ApiController extends Controller
                 'location_type'        => 'nullable|string',
                 'expiration_date'      => 'nullable|date',
                 'expiration_time'      => 'nullable|string',
+                'for_a_cause_text'     => 'nullable|string',
             ]);
             if ($validator->fails()) {
                 ResponseService::validationError($validator->errors()->first());
@@ -646,6 +658,7 @@ class ApiController extends Controller
                 'provider_item_type'   => $providerItemType,
                 'expiration_date'      => $request->expiration_date ?? null,
                 'expiration_time'      => $request->expiration_time ?? null,
+                'for_a_cause_text'     => empty(trim($request->for_a_cause_text ?? '')) ? null : trim($request->for_a_cause_text),
             ];
 
             if ($request->hasFile('image')) {
@@ -715,6 +728,7 @@ class ApiController extends Controller
             $result = new ItemCollection($result);
 
             DB::commit();
+            SendNotificationEmailService::send(new PostListingNotificationEmail());
             ResponseService::successResponse("Item Added Successfully", $result);
         } catch (Throwable $th) {
             DB::rollBack();
@@ -1028,11 +1042,11 @@ class ApiController extends Controller
                 if ($currentURI[0] == "/api/my-items") { //TODO: This if condition is temporary fix. Need something better
                     $sql->where(['items.user_id' => Auth::user()->id])->withTrashed();
                 } else {
-                    $sql->where('status', 'approved')->has('user')->onlyNonBlockedUsers()->getNonExpiredItems();
+                    $sql->where('status', 'approved')->has('user')->onlyNonBlockedUsers();
                 }
             } else {
                 //  Other users should only get approved items
-                $sql->where('status', 'approved')->getNonExpiredItems();
+                $sql->where('status', 'approved');
             }
             if (!empty($request->id)) {
                 /*
@@ -1611,6 +1625,10 @@ class ApiController extends Controller
                 'user_id'       => $user->id,
                 'other_message' => $request->other_message ?? '',
             ]);
+            $item = Item::where('id', $request->item_id)->first();
+            if($item != null) {
+                SendNotificationEmailService::send(new ReportNotificationEmail($item->name));
+            }
             ResponseService::successResponse("Report Submitted Successfully");
         } catch (Throwable $th) {
             ResponseService::logErrorResponse($th, "API Controller -> addReports");
@@ -1650,7 +1668,7 @@ class ApiController extends Controller
             $rows = array();
 
             foreach ($featureSection as $row) {
-                $items = Item::where('status', 'approved')->take(5)->with('user:id,name,email,mobile,profile,is_verified,show_personal_details,country_code', 'category:id,name,image', 'gallery_images:id,image,item_id', 'featured_items', 'favourites', 'item_custom_field_values.custom_field')->withCount('favourites')->has('user')->getNonExpiredItems();
+                $items = Item::where('status', 'approved')->take(5)->with('user:id,name,email,mobile,profile,is_verified,show_personal_details,country_code', 'category:id,name,image', 'gallery_images:id,image,item_id', 'featured_items', 'favourites', 'item_custom_field_values.custom_field')->withCount('favourites')->has('user');
                 $items = match ($row->filter) {
                     "price_criteria" => $items->whereBetween('price', [$row->min_price, $row->max_price]),
                     "most_viewed" => $items->orderBy('clicks', 'DESC'),
@@ -2847,19 +2865,20 @@ class ApiController extends Controller
     }
 
     private function filterOutExpiredExperiences(\Illuminate\Contracts\Database\Eloquent\Builder $sql) : \Illuminate\Contracts\Database\Eloquent\Builder {
-        $currentDate = date('Y-m-d');
-        $currentTime = date('H:i:s');
-        // Not expired items:
-        // 1. expiration_date is in the future, OR
-        // 2. expiration_date is today but expiration_time hasn't passed yet, OR
-        // 3. expiration_date is null (no expiration)
-        return $sql->where(function($q) use ($currentDate, $currentTime) {
-            $q->where('expiration_date', '>', $currentDate)
-                ->orWhere(function($innerQ) use ($currentDate, $currentTime) {
-                    $innerQ->where('expiration_date', '=', $currentDate)
-                        ->where('expiration_time', '>', $currentTime);
-                })->orWhereNull('expiration_date');
-        });
+//        $currentDate = date('Y-m-d');
+//        $currentTime = date('H:i:s');
+//        // Not expired items:
+//        // 1. expiration_date is in the future, OR
+//        // 2. expiration_date is today but expiration_time hasn't passed yet, OR
+//        // 3. expiration_date is null (no expiration)
+//        return $sql->where(function($q) use ($currentDate, $currentTime) {
+//            $q->where('expiration_date', '>', $currentDate)
+//                ->orWhere(function($innerQ) use ($currentDate, $currentTime) {
+//                    $innerQ->where('expiration_date', '=', $currentDate)
+//                        ->where('expiration_time', '>', $currentTime);
+//                })->orWhereNull('expiration_date');
+//        });
+        return $sql->orderByDesc(DB::raw('expiration_date'));
     }
 
     private function applySorting($query, $sortBy)
@@ -3649,11 +3668,13 @@ class ApiController extends Controller
                 ->get()
                 ->first();
 
-            $categoriesIds = explode(',', $user->categories);
-            $categories = Category::whereIn('id', $categoriesIds)->get();
-            ds($categories);
-            $user->categories_models = $categories;
-            $user->categories_array = $categories;
+            if(isset($user->categories)) {
+                $categoriesIds = explode(',', $user->categories);
+                $categories = Category::whereIn('id', $categoriesIds)->get();
+                ds($categories);
+                $user->categories_models = $categories;
+                $user->categories_array = $categories;
+            }
 
             return ResponseService::successResponse('Provider fetched successfully', $user);
         }catch (Throwable $th) {
