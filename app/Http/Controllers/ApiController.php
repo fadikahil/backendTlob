@@ -3224,6 +3224,24 @@ class ApiController extends Controller
                 'review'      => $request->review,
             ]);
 
+            $notificationTitle = 'Review for ' . $item->name;
+            $notificationMessage = "A review was added for " . $item->name . " by " . Auth::user()->name;
+
+            // Create notification record
+            Notifications::create([
+                'title' => $notificationTitle,
+                'message' => $notificationMessage,
+                'item_id' => $item->id,
+                'user_id' => $item->user_id,
+                'send_to' => 'selected',
+                'image' => ''
+            ]);
+
+            Log::info($item->user_id);
+
+            $seller_fcm = UserFcmToken::where('user_id', $item->user_id)->pluck('fcm_token')->toArray();
+            NotificationService::sendFcmNotification($seller_fcm, $notificationTitle, $notificationMessage, null, null);
+
             ResponseService::successResponse("Review submitted successfully.", $review);
         } catch (Throwable $th) {
             ResponseService::logErrorResponse($th, "API Controller -> addServiceReview");
