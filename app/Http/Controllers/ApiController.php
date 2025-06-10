@@ -375,7 +375,7 @@ class ApiController extends Controller
             }
 
             if (!empty($request->fcm_id)) {
-                UserFcmToken::updateOrCreate(['fcm_token' => $request->fcm_id], ['user_id' => $app_user->id, 'created_at' => Carbon::now(), 'updated_at' => Carbon::now()]);
+                UserFcmToken::updateOrCreate(['fcm_token' => $request->fcm_id], ['user_id' => $app_user->id, 'created_at' => Carbon::now(), 'updated_at' => Carbon::now(), 'fcm_token' => $request->fcm_id]);
             }
 
             // Set show_personal_details if provided
@@ -3105,6 +3105,24 @@ class ApiController extends Controller
                 'ratings'     => $request->ratings,
                 'review'      => $request->review,
             ]);
+
+            $notificationTitle = 'Review for You';
+            $notificationMessage = "A review was added for your account by " . Auth::user()->name;
+
+            // Create notification record
+            Notifications::create([
+                'title' => $notificationTitle,
+                'message' => $notificationMessage,
+                'item_id' => null,
+                'user_id' => $item->user_id,
+                'send_to' => 'selected',
+                'image' => ''
+            ]);
+
+            $seller_fcm = UserFcmToken::where('user_id', $item->user_id)->pluck('fcm_token')->toArray();
+            if($seller_fcm) {
+                NotificationService::sendFcmNotification($seller_fcm, $notificationTitle, $notificationMessage, null, null);
+            }
 
             ResponseService::successResponse("Review submitted successfully.", $review);
         } catch (Throwable $th) {
