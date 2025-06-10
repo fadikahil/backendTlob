@@ -2087,7 +2087,8 @@ class ApiController extends Controller
             /* message_type is reserved keyword in FCM so removed here*/
             unset($fcmMsg['message_type']);
             $receiverFCMTokens = UserFcmToken::where('user_id', $receiver_id)->pluck('fcm_token')->toArray();
-            ds($fcmMsg);
+            Log::info($receiver_id);
+            Log::info($receiverFCMTokens->implode(' - '));
             $notification = NotificationService::sendFcmNotification($receiverFCMTokens, 'Message', $request->message, "chat", $fcmMsg);
 
             DB::commit();
