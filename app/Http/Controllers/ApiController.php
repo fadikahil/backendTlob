@@ -232,6 +232,7 @@ class ApiController extends Controller
                 'city'          => $request->city,
                 'categories'    => $request->categories,
                 'phone'         => $request->phone,
+                'mobile'         => $request->phone,
                 'platform_type' => $request->platform_type,
                 'country_code'  => $request->country_code,
                 'type'          => $request->userType == 'Client' ? 'Client' :  $request->providerType, // Set type to 'email' by default
