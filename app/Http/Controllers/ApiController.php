@@ -2485,9 +2485,7 @@ class ApiController extends Controller
             ]);
 
             $seller_fcm = UserFcmToken::where('user_id', $item->user_id)->pluck('fcm_token')->toArray();
-            if($seller_fcm) {
-                NotificationService::sendFcmNotification($seller_fcm, $notificationTitle, $notificationMessage, null, null);
-            }
+            NotificationService::sendFcmNotification($seller_fcm, $notificationTitle, $notificationMessage, null, null);
 
             ResponseService::successResponse("Your review has been submitted successfully.", $review);
         } catch (Throwable $th) {
