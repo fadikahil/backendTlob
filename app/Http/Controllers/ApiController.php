@@ -2484,6 +2484,8 @@ class ApiController extends Controller
                 'image' => ''
             ]);
 
+            Log::info($item->user_id);
+
             $seller_fcm = UserFcmToken::where('user_id', $item->user_id)->pluck('fcm_token')->toArray();
             NotificationService::sendFcmNotification($seller_fcm, $notificationTitle, $notificationMessage, null, null);
 
