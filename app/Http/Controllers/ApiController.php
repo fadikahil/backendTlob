@@ -3015,6 +3015,7 @@ class ApiController extends Controller
                             'area:id,name')
                 ->withCount('favourites')
                 ->select('items.*')
+                ->where('provider_item_type', 'service')
                 ->where('status', 'approved')
                 ->orderBy('created_at', 'desc'); // Always sort by newest first
 
