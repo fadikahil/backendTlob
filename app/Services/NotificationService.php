@@ -21,7 +21,7 @@ class NotificationService {
      */
     public static function sendFcmNotification(array $registrationIDs, string|null $title = '', string|null $message = '', string|null $type = "default", array|null $customBodyFields = []): string|array|bool {
         try {
-            Log::info('Sending notification "' . $title . '" with message "'. $message. '" for these ids : ' . $registrationIDs);
+            Log::info('Sending notification "' . $title . '" with message "'. $message. '" for these ids : ' . implode('   -   ', $registrationIDs));
             ds(collect($registrationIDs)->unique());
             $customBodyFields = $customBodyFields ?? [];
             $type = $type ?? 'default';
