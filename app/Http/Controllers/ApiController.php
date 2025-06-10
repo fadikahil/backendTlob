@@ -375,7 +375,7 @@ class ApiController extends Controller
             }
 
             if (!empty($request->fcm_id)) {
-                UserFcmToken::updateOrCreate(['fcm_token' => $request->fcm_id], ['user_id' => $app_user->id, 'created_at' => Carbon::now(), 'updated_at' => Carbon::now(), 'fcm_token' => $request->fcm_id]);
+                UserFcmToken::create(['user_id' => $app_user->id, 'created_at' => Carbon::now(), 'updated_at' => Carbon::now(), 'fcm_token' => $request->fcm_id]);
             }
 
             // Set show_personal_details if provided
