@@ -54,8 +54,8 @@
                             <th scope="col" data-field="price" data-align="center" data-sortable="true">{{ __('Price') }}</th>
                             <th scope="col" data-field="image" data-align="center" data-sortable="false" data-escape="false" data-formatter="imageFormatter">{{ __('Image') }}</th>
                             <th scope="col" data-field="gallery_images" data-align="center" data-sortable="false" data-formatter="galleryImageFormatter" data-escape="false">{{ __('Other Images') }}</th>
-                            <th scope="col" data-field="latitude" data-sortable="true" data-visible="false">{{ __('Latitude') }}</th>
-                            <th scope="col" data-field="longitude" data-sortable="true" data-visible="false">{{ __('Longitude') }}</th>
+                            <th scope="col" data-field="latitude" data-sortable="true" data-visible="true">{{ __('Latitude') }}</th>
+                            <th scope="col" data-field="longitude" data-sortable="true" data-visible="true">{{ __('Longitude') }}</th>
                             <th scope="col" data-field="address" data-sortable="true" data-visible="false">{{ __('Address') }}</th>
                             <th scope="col" data-field="contact" data-sortable="true" data-visible="false">{{ __('Contact') }}</th>
                             <th scope="col" data-field="country" data-align="center" data-sortable="true" data-visible="true">{{ __('Country') }}</th>
