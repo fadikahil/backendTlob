@@ -50,7 +50,9 @@ class User extends Authenticatable
         'facebook',
         'twitter',
         'instagram',
-        'tiktok'
+        'tiktok',
+        'latitude',
+        'longitude'
     ];
 
     /**

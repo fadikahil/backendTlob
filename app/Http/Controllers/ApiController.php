@@ -198,6 +198,8 @@ class ApiController extends Controller
                 'platform_type' => 'nullable|in:android,ios',
                 'fullName'      => 'nullable|string',
                 'gender'        => 'nullable|in:Male,Female,Other',
+                'latitude'      => 'nullable|numeric|between:-90,90',
+                'longitude'     => 'nullable|numeric|between:-180,180',
                 'country'       => 'nullable|string',
                 'city'          => 'nullable|string',
                 'state'         => 'nullable|string',
@@ -227,6 +229,8 @@ class ApiController extends Controller
                 'password'      => bcrypt($request->password),
                 'name'          => $request->fullName,
                 'gender'        => $request->gender,
+                'latitude'      => $request->latitude,
+                'longitude'     => $request->longitude,
                 'country'       => $request->country,
                 'state'         => $request->state,
                 'city'          => $request->city,
@@ -316,6 +320,8 @@ class ApiController extends Controller
                 'show_personal_details' => 'boolean',
                 'country_code'          => 'nullable|string',
                 'gender'                => 'nullable|in:Male,Female',
+                'latitude'              => 'nullable|numeric|between:-90,90',
+                'longitude'             => 'nullable|numeric|between:-180,180',
                 'country'               => 'nullable|string', // Keep for backward compatibility
                 'state'               => 'nullable|string', // Keep for backward compatibility
                 'city'               => 'nullable|string', // Keep for backward compatibility
@@ -556,6 +562,8 @@ class ApiController extends Controller
                 'gallery_images'       => 'nullable|array|min:1',
                 'gallery_images.*'     => 'nullable|mimes:jpeg,png,jpg|max:6144',
                 'image'                => 'nullable|mimes:jpeg,png,jpg|max:6144',
+                'latitude'             => 'nullable|numeric|between:-90,90',
+                'longitude'            => 'nullable|numeric|between:-180,180',
                 'country'              => 'nullable',
                 'state'                => 'nullable',
                 'city'                 => 'nullable',
@@ -651,6 +659,8 @@ class ApiController extends Controller
                 'contact'              => $request->contact ?? null,
                 'show_only_to_premium' => $request->show_only_to_premium ?? 0,
                 'video_link'           => $request->video_link ?? null,
+                'latitude'             => $request->latitude,
+                'longitude'            => $request->longitude,
                 'country'              => $request->country ?? '',
                 'state'                => $request->state ?? null,
                 'city'                 => $request->city ?? '',
@@ -1093,8 +1103,8 @@ class ApiController extends Controller
             'slug'                 => 'regex:/^[a-z0-9-]+$/',
             'price'                => 'nullable',
             'description'          => 'nullable',
-            'latitude'             => 'nullable',
-            'longitude'            => 'nullable',
+            'latitude'             => 'nullable|numeric|between:-90,90',
+            'longitude'            => 'nullable|numeric|between:-180,180',
             'address'              => 'nullable',
             'contact'              => 'nullable',
             'image'                => 'nullable|mimes:jpeg,jpg,png|max:6144',
@@ -3851,6 +3861,141 @@ class ApiController extends Controller
         } catch (Throwable $th) {
             ResponseService::logErrorResponse($th, 'API Controller -> getUsers');
             return ResponseService::errorResponse();
+        }
+    }
+
+    /**
+     * Search places using Google Places API
+     */
+    public function searchPlaces(Request $request)
+    {
+        try {
+            $validator = Validator::make($request->all(), [
+                'input' => 'required|string|min:2',
+                'types' => 'nullable|string',
+                'language' => 'nullable|string'
+            ]);
+
+            if ($validator->fails()) {
+                return ResponseService::validationError($validator->errors()->first());
+            }
+
+            $googleApiKey = Setting::where('type', 'google_place_api_key')->value('data');
+            
+            if (empty($googleApiKey)) {
+                return ResponseService::errorResponse('Google Places API key not configured');
+            }
+
+            $client = new \GuzzleHttp\Client();
+            $response = $client->get('https://maps.googleapis.com/maps/api/place/autocomplete/json', [
+                'query' => [
+                    'input' => $request->input,
+                    'key' => $googleApiKey,
+                    'types' => $request->types ?? 'geocode',
+                    'language' => $request->language ?? 'en',
+                ]
+            ]);
+
+            $data = json_decode($response->getBody()->getContents(), true);
+
+            if ($data['status'] === 'OK') {
+                return ResponseService::successResponse('Places fetched successfully', $data['predictions']);
+            } else {
+                return ResponseService::errorResponse('Failed to fetch places: ' . $data['status']);
+            }
+
+        } catch (Throwable $th) {
+            ResponseService::logErrorResponse($th, 'API Controller -> searchPlaces');
+            return ResponseService::errorResponse('Failed to search places');
+        }
+    }
+
+    /**
+     * Get place details from place ID
+     */
+    public function getPlaceDetails(Request $request)
+    {
+        try {
+            $validator = Validator::make($request->all(), [
+                'place_id' => 'required|string',
+                'fields' => 'nullable|string'
+            ]);
+
+            if ($validator->fails()) {
+                return ResponseService::validationError($validator->errors()->first());
+            }
+
+            $googleApiKey = Setting::where('type', 'google_place_api_key')->value('data');
+            
+            if (empty($googleApiKey)) {
+                return ResponseService::errorResponse('Google Places API key not configured');
+            }
+
+            $client = new \GuzzleHttp\Client();
+            $response = $client->get('https://maps.googleapis.com/maps/api/place/details/json', [
+                'query' => [
+                    'place_id' => $request->place_id,
+                    'key' => $googleApiKey,
+                    'fields' => $request->fields ?? 'geometry,formatted_address,address_components',
+                ]
+            ]);
+
+            $data = json_decode($response->getBody()->getContents(), true);
+
+            if ($data['status'] === 'OK') {
+                return ResponseService::successResponse('Place details fetched successfully', $data['result']);
+            } else {
+                return ResponseService::errorResponse('Failed to fetch place details: ' . $data['status']);
+            }
+
+        } catch (Throwable $th) {
+            ResponseService::logErrorResponse($th, 'API Controller -> getPlaceDetails');
+            return ResponseService::errorResponse('Failed to get place details');
+        }
+    }
+
+    /**
+     * Reverse geocode coordinates to address
+     */
+    public function reverseGeocode(Request $request)
+    {
+        try {
+            $validator = Validator::make($request->all(), [
+                'latitude' => 'required|numeric|between:-90,90',
+                'longitude' => 'required|numeric|between:-180,180',
+                'language' => 'nullable|string'
+            ]);
+
+            if ($validator->fails()) {
+                return ResponseService::validationError($validator->errors()->first());
+            }
+
+            $googleApiKey = Setting::where('type', 'google_place_api_key')->value('data');
+            
+            if (empty($googleApiKey)) {
+                return ResponseService::errorResponse('Google Places API key not configured');
+            }
+
+            $client = new \GuzzleHttp\Client();
+            $response = $client->get('https://maps.googleapis.com/maps/api/geocode/json', [
+                'query' => [
+                    'latlng' => $request->latitude . ',' . $request->longitude,
+                    'key' => $googleApiKey,
+                    'language' => $request->language ?? 'en',
+                ]
+            ]);
+
+            $data = json_decode($response->getBody()->getContents(), true);
+
+            if ($data['status'] === 'OK' && !empty($data['results'])) {
+                return ResponseService::successResponse('Address fetched successfully', $data['results'][0]);
+            } else {
+                return ResponseService::errorResponse('Failed to fetch address: ' . $data['status']);
+            }
+
+        } catch (Throwable $th) {
+            ResponseService::logErrorResponse($th, 'API Controller -> reverseGeocode');
+            return ResponseService::errorResponse('Failed to reverse geocode');
         }
     }
 }

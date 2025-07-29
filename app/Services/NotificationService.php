@@ -76,6 +76,7 @@ class NotificationService {
                                         "title" => $title,
                                         "body"  => $message ?? '',
                                     ],
+                                    "sound" => "default",
                                 ]
                             ]
                         ]

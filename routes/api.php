@@ -113,3 +113,8 @@ Route::get('corporate-package-items', [ApiController::class, 'getCorporatePackag
 Route::get('newest-items', [ApiController::class, 'getNewestItems']);
 Route::get('featured-items', [ApiController::class, 'getFeaturedItems']);
 Route::get('featured-users', [ApiController::class, 'getFeaturedUsers']);
+
+/* Google Places API Proxy Routes */
+Route::get('search-places', [ApiController::class, 'searchPlaces']);
+Route::get('place-details', [ApiController::class, 'getPlaceDetails']);
+Route::get('reverse-geocode', [ApiController::class, 'reverseGeocode']);
