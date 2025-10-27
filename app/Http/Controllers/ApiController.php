@@ -28,6 +28,7 @@ use App\Models\Notifications;
 use App\Models\Package;
 use App\Models\PaymentConfiguration;
 use App\Models\PaymentTransaction;
+use App\Models\Receipt;
 use App\Models\ReportReason;
 use App\Models\SellerRating;
 use App\Models\SeoSetting;
@@ -37,9 +38,12 @@ use App\Models\SocialLogin;
 use App\Models\State;
 use App\Models\Tip;
 use App\Models\User;
+use App\Models\UserAudienceRelation;
+use App\Models\UserClaim;
 use App\Models\UserFcmToken;
 use App\Models\UserPurchasedPackage;
 use App\Models\UserReports;
+use App\Models\UserScore;
 use App\Models\VerificationField;
 use App\Models\VerificationFieldRequest;
 use App\Models\VerificationFieldValue;
@@ -51,6 +55,7 @@ use App\Services\FileService;
 use App\Services\HelperService;
 use App\Services\NotificationService;
 use App\Services\Payment\PaymentService;
+use App\Services\ReceiptService;
 use App\Services\ResponseService;
 use App\Services\SendNotificationEmailService;
 use Carbon\Carbon;
@@ -113,7 +118,7 @@ class ApiController extends Controller
             'getNewestItems',
             'getFeaturedItems',
             'getFeaturedUsers',
-            'getProvider',
+            'getProvider'
         ]);
     }
 
@@ -184,6 +189,25 @@ class ApiController extends Controller
         } catch (Throwable $th) {
             ResponseService::logErrorResponse($th, "API Controller -> getSystemSettings");
             ResponseService::errorResponse();
+        }
+    }
+
+    public function getUserScore(Request $request) {
+        try {
+            Log::info("User get score request", $request->all());
+
+            $app_user = Auth::user();
+
+            $id = $app_user->id;
+
+            $score = UserScore::where('user_id', $id)->first();
+            return ResponseService::successResponse("Data Fetched Successfully", [
+                'score' => $score == null ? 0 : $score->score,
+                'type' => $app_user->type === 'Client' ? 'growth' : 'impact'
+            ]);
+        }catch (Throwable $th) {
+            ResponseService::logErrorResponse($th, "API Controller -> getUserScore");
+            return ResponseService::errorResponse();
         }
     }
 
@@ -578,6 +602,11 @@ class ApiController extends Controller
                 'expiration_date'      => 'nullable|date',
                 'expiration_time'      => 'nullable|string',
                 'for_a_cause_text'     => 'nullable|string',
+                'item_date'            => 'required|date',
+                'item_time'            => 'required|string',
+                'end_timer_option'     => 'required|string',
+                'audience'             => 'required|string',
+                'slots'                => 'required|integer'
             ]);
             if ($validator->fails()) {
                 ResponseService::validationError($validator->errors()->first());
@@ -585,6 +614,7 @@ class ApiController extends Controller
 
             DB::beginTransaction();
             $user = Auth::user();
+            Log::info('Add item request with details: ', $request->all());
 
             // Determine provider_item_type based on post_type parameter
             $providerItemType = 'service'; // Default value
@@ -670,12 +700,21 @@ class ApiController extends Controller
                 'expiration_date'      => $request->expiration_date ?? null,
                 'expiration_time'      => $request->expiration_time ?? null,
                 'for_a_cause_text'     => empty(trim($request->for_a_cause_text ?? '')) ? null : trim($request->for_a_cause_text),
+                'item_date'            => $request->item_date ?? null,
+                'item_time'            => $request->item_time ?? null,
+                'end_timer_option'     => $request->end_timer_option ?? null,
+                'audience'             => $request->audience ?? null,
+                'slots'                => $request->slots ?? null,
+                'slots_taken'          => 0,
             ];
 
             if ($request->hasFile('image')) {
                 $data['image'] = FileService::compressAndUpload($request->file('image'), $this->uploadFolder);
             }
             $item = Item::create($data);
+
+            Log::info($item->item_date);
+            Log::info($item->slots);
 
             if ($request->hasFile('gallery_images')) {
                 $galleryImages = [];
@@ -748,6 +787,33 @@ class ApiController extends Controller
         }
     }
 
+    public function getUsersThatClaimedItem(Request $request) {
+        try {
+
+            $validator = Validator::make($request->all(), [
+                'item_id' => 'required|integer|exists:items,id',
+            ]);
+
+            if ($validator->fails()) {
+                ResponseService::validationError($validator->errors()->first());
+                return;
+            }
+
+            $item_id = $request->item_id;
+
+            $users = DB::table('users')
+                ->join('user_claims', 'users.id', '=', 'user_claims.user_id')
+                ->where('user_claims.item_id', $item_id)
+                ->select('users.*')
+                ->get();
+
+            ResponseService::successResponse("Users Found", $users);
+        }catch (Throwable $th) {
+            ResponseService::logErrorResponse($th, "API Controller -> getClaimedUsersOfItem");
+            ResponseService::errorResponse();
+        }
+    }
+
     public function getItem(Request $request) {
         Log::info('getItem request received: ' . json_encode($request->all()));
         $validator = Validator::make($request->all(), [
@@ -766,6 +832,7 @@ class ApiController extends Controller
             'posted_since'      => 'nullable|in:all-time,today,within-1-week,within-2-week,within-1-month,within-3-month',
             'rating_from'  => 'nullable|numeric|min:0|max:5',
             'rating_to'    => 'nullable|numeric|min:0|max:5',
+            'organization_id' => 'nullable|exists:users,id'
         ]);
 
 //        ds($request->all());
@@ -782,11 +849,21 @@ class ApiController extends Controller
                     DB::raw('AVG(user_reviews.ratings) as user_average_rating'),
                     DB::raw('COUNT(user_reviews.id) as user_total_reviews'),
                     DB::raw('COUNT(featured_users.id) > 0 as is_user_featured')
+                    ,
+                    DB::raw('(select SUM(u_score.score) from user_scores u_score where u_score.user_id = items.user_id and type = \'impact\') as user_score')
                 )
                 ->leftJoin('user_reviews', 'items.user_id', '=', 'user_reviews.user_id')
                 ->leftJoin('featured_users', 'items.user_id', '=', 'featured_users.user_id')
                 ->groupBy('items.id')
                 ->whereHas('user')
+                ->where('provider_item_type', 'experience') //todo only temporarily (if you want services remove this line
+                ->when($request->claimed_by_me && $request->my_id, function ($query) use ($request) {
+                    $query->whereHas('user_claims', function ($subQuery) use ($request) {
+                        $subQuery->where('user_id', $request->my_id);
+                    });
+                })->when($request->having_at_least_one_claim, function ($query) {
+                    $query->where('slots_taken', '>', 0);
+                })
                 ->when($request->id, function ($sql) use ($request) {
                     $sql->where('id', $request->id);
                 })->when(($request->category_id), function ($sql) use ($request) {
@@ -817,6 +894,20 @@ class ApiController extends Controller
                     return $sql->whereHas('user', function($query) use ($request) {
                         $query->where('gender', $request->gender);
                     });
+                })->when($request->public_only, function ($sql) {
+                    $sql->where('items.audience', 'public');
+                })->when($request->organization_id && $request->my_email, function ($query) use ($request) {
+                    $organization_id = $request->organization_id;
+
+                    // Subquery to get audience types related to this organization
+                    $audience_types = UserAudienceRelation::where('organization_id', $organization_id)
+                        ->where('user_email', $request->my_email)
+                        ->pluck('type')
+                        ->toArray();
+
+                    // Filter items belonging to the organization and matching at least one audience type
+                    $query->where('items.user_id', $organization_id)
+                        ->whereIn('items.audience', $audience_types);
                 })->when((isset($request->min_price) || isset($request->max_price)), function ($sql) use ($request) {
                     $min_price = $request->min_price ?? 0;
                     $max_price = $request->max_price ?? Item::max('price');
@@ -1095,6 +1186,66 @@ class ApiController extends Controller
         }
     }
 
+    public function getPrivateSpaces()
+    {
+        try {
+            $user_email = Auth::user()->email;
+
+            // get all relations for the current user
+            $relations = UserAudienceRelation::where('user_email', $user_email)->get();
+
+            // group them by organization
+            $org_audience_map = $relations->groupBy('organization_id')
+                ->map(fn($rels) => $rels->pluck('type')->toArray());
+
+            // query organizations that have at least one matching item
+            $organizations = User::query()
+                ->select('id', 'name') // ✅ only need id and name
+                ->whereIn('id', array_keys($org_audience_map->toArray()))
+                ->whereHas('items', function ($query) use ($org_audience_map) {
+                    $query->where(function ($q) use ($org_audience_map) {
+                        foreach ($org_audience_map as $orgId => $audiences) {
+                            $q->orWhere(function ($sub) use ($orgId, $audiences) {
+                                $sub->where('user_id', $orgId)
+                                    ->where('status', 'approved')
+                                    ->whereIn('audience', $audiences);
+                            });
+                        }
+                    });
+                })
+                ->get();
+
+            ResponseService::successResponse("Fetch private spaces successfull", $organizations);
+        }catch (Throwable $th) {
+            ResponseService::logErrorResponse($th, "API Controller -> getPrivateSpaces");
+            ResponseService::errorResponse();
+        }
+    }
+
+    public function linkUser(Request $request) {
+        try {
+            $validator = Validator::make($request->all(), [
+                'email' => 'required|email',
+                'type' => 'required',
+            ]);
+            if ($validator->fails()) {
+                ResponseService::validationError($validator->errors()->first());
+            }
+            $id = Auth::id();
+            UserAudienceRelation::firstOrCreate([
+                'user_email' => $request->email,
+                'type' => $request->type,
+                'organization_id' => $id,
+            ]);
+
+            $url = "https://tlobni.com"; //todo to be checked
+            ResponseService::successResponse("Relation successfully created", $url);
+        }catch (Throwable $th) {
+            ResponseService::logErrorResponse($th, "API Controller -> linkUser");
+            ResponseService::errorResponse();
+        }
+    }
+
     public function updateItem(Request $request)
     {
         $validator = Validator::make($request->all(), [
@@ -1123,6 +1274,8 @@ class ApiController extends Controller
 
             $item = Item::owner()->findOrFail($request->id);
 
+            $slots_taken = $item->slots_taken;
+
             $slug = $request->input('slug', $item->slug);
             $uniqueSlug = HelperService::generateUniqueSlug(new Item(), $slug, $request->id);
 
@@ -1131,6 +1284,8 @@ class ApiController extends Controller
             if ($request->hasFile('image')) {
                 $data['image'] = FileService::compressAndReplace($request->file('image'), $this->uploadFolder, $item->getRawOriginal('image'));
             }
+
+            $data['slots_taken'] = $slots_taken;
 
             $item->update($data);
 
@@ -1822,6 +1977,84 @@ class ApiController extends Controller
             ResponseService::successResponse("Package assigned successfully", ["payment_intent" => $paymentGatewayDetails, "payment_transaction" => $paymentTransactionData]);
         } catch (Throwable $e) {
             DB::rollBack();
+            ResponseService::logErrorResponse($e);
+            ResponseService::errorResponse();
+        }
+    }
+
+    public function checkIfClaimed(Request $request) {
+        try {
+            $item_id = $request->query('item_id');
+            $user_id = Auth::user()->id;
+
+            $exists = UserClaim::where('user_id', $user_id)->where('item_id', $item_id)->exists();
+
+            ResponseService::successResponse('User claim verification acquired', $exists);
+        }catch (Throwable $e) {
+            ResponseService::logErrorResponse($e);
+            ResponseService::errorResponse();
+        }
+    }
+
+    public function claimItem(Request $request) {
+        try {
+            $validator = Validator::make($request->all(), [
+                'item_id' => 'required',
+            ]);
+            if ($validator->fails()) {
+                ResponseService::validationError($validator->errors()->first());
+            }
+
+            $user = Auth::user();
+
+            $item = Item::where('id', $request->item_id)->first();
+            if ($item == null) {
+                throw new \Exception("Item not found");
+            }
+            $provider_id = $item->user_id;
+
+            if(!isset($item->slots) || !isset($item->slots_taken)) {
+                throw new \Exception('Item is not configured well! (slots)');
+            }
+
+            if($item->slots_taken >= $item->slots) {
+                throw new \Exception('Item has reached it\'s max capacity!');
+            }
+
+            Item::where('id', $item->id)->update(['slots_taken' => $item->slots_taken + 1]);
+
+            UserClaim::create([
+                'user_id' => $user->id,
+                'item_id' => $request->item_id,
+            ]);
+
+            $user_score = UserScore::firstOrCreate(
+                ['user_id' => $user->id, 'type' => 'growth'],
+                ['score' => 0] // default when creating
+            );
+
+            $user_score->increment('score');
+
+            $provider_score = UserScore::firstOrCreate(
+                ['user_id' => $provider_id, 'type' => 'impact'],
+                ['score' => 0]
+            );
+
+            $provider_score->increment('score');
+
+            $this->generateReceipt($item->id);
+
+            ResponseService::successResponse('Claimed Item Successfully', $user_score);
+        }catch (Throwable $e) {
+            ResponseService::logErrorResponse($e);
+            ResponseService::errorResponse();
+        }
+    }
+
+    public function getMyReceipts(Request $request) {
+        try {
+            $user = Auth::user();
+        }catch (Throwable $e) {
             ResponseService::logErrorResponse($e);
             ResponseService::errorResponse();
         }
@@ -2948,6 +3181,7 @@ class ApiController extends Controller
                 ->withCount('favourites')
                 ->select('items.*')
                 ->where('status', 'approved')
+                ->where('audience', 'public')
                 ->where(function($query) {
                     // Check provider_item_type field with multiple ways to identify experiences
                     $query->where('provider_item_type', '=', 'experience')
@@ -3881,7 +4115,7 @@ class ApiController extends Controller
             }
 
             $googleApiKey = Setting::where('type', 'google_place_api_key')->value('data');
-            
+
             if (empty($googleApiKey)) {
                 return ResponseService::errorResponse('Google Places API key not configured');
             }
@@ -3926,7 +4160,7 @@ class ApiController extends Controller
             }
 
             $googleApiKey = Setting::where('type', 'google_place_api_key')->value('data');
-            
+
             if (empty($googleApiKey)) {
                 return ResponseService::errorResponse('Google Places API key not configured');
             }
@@ -3971,7 +4205,7 @@ class ApiController extends Controller
             }
 
             $googleApiKey = Setting::where('type', 'google_place_api_key')->value('data');
-            
+
             if (empty($googleApiKey)) {
                 return ResponseService::errorResponse('Google Places API key not configured');
             }
@@ -3996,6 +4230,105 @@ class ApiController extends Controller
         } catch (Throwable $th) {
             ResponseService::logErrorResponse($th, 'API Controller -> reverseGeocode');
             return ResponseService::errorResponse('Failed to reverse geocode');
+        }
+    }
+
+    private function generateReceipt(string $item_id) {
+
+        $user = Auth::user();
+        $item = Item::with(['user', 'category'])->findOrFail($item_id);
+
+        Log::info('Generating receipt for item ' . $item_id . 'for user '. $user->id);
+        // Check if user has claimed this item
+        $userClaim = UserClaim::where('user_id', $user->id)
+            ->where('item_id', $item->id)
+            ->first();
+
+        if (!$userClaim) {
+            throw new \Exception('You have not claimed this opportunity');
+        }
+
+        // Get user's growth score for this item
+        $userScore = UserScore::where('user_id', $user->id)
+            ->where('type', 'growth')
+            ->first();
+
+        $growthScore = $userScore ? $userScore->score : 0;
+
+        // Format date
+        $itemDate = Carbon::parse($item->date)->format('F j, Y');
+
+        // Get location
+        $location = $item->city && $item->country
+            ? ($item->city . ', ' . $item->country)
+            : ($item->city
+                ? $item->city
+                : ($item->country
+                    ? $item->country
+                    : ($item->address ?? 'N/A')));
+
+        $userName = $user->name;
+        $itemTitle = $item->name;
+        $organizationName = $item->user->name;
+        $itemCategory = $item->category->name ?? 'General';
+        $itemLocation = $location;
+
+        // Generate receipt using static method
+        $receiptPath = ReceiptService::generateReceiptImage(
+            userName: $user->name,
+            itemTitle: $item->name,
+            organizationName: $item->user->name,
+            itemCategory: $item->category->name ?? 'General',
+            itemDate: $itemDate,
+            itemLocation: $location,
+            growthScore: $growthScore
+        );
+
+        // Get public URL using static method
+        $receiptUrl = ReceiptService::getReceiptUrl($receiptPath);
+
+        Log::info('Generated receipt with url ' . $receiptUrl);
+
+        return Receipt::create([
+            'user_id' => $user->id,
+            'item_id' => $item_id,
+            'url' => $receiptUrl,
+            'path' => $receiptPath,
+            'user_name' => $userName,
+            'item_title' => $itemTitle,
+            'organization_name' => $organizationName,
+            'item_category' => $itemCategory,
+            'item_date' => $itemDate,
+            'item_location' => $itemLocation,
+            'growth_score' => $growthScore,
+        ]);
+    }
+
+    /**
+     * Get paginated receipts for authenticated user
+     */
+    public function getUserReceipts(Request $request)
+    {
+        try {
+            $user = Auth::user();
+
+            if (!$user) {
+                return ResponseService::errorResponse('User not authenticated');
+            }
+
+            // Get pagination parameters
+            $perPage = $request->input('per_page', 10);
+
+            // Get receipts for the authenticated user with pagination
+            $receipts = Receipt::where('user_id', $user->id)
+                ->orderBy('created_at', 'desc')
+                ->paginate($perPage);
+
+            return ResponseService::successResponse('Receipts retrieved successfully', $receipts);
+
+        } catch (Throwable $th) {
+            ResponseService::logErrorResponse($th, 'API Controller -> getUserReceipts');
+            return ResponseService::errorResponse('Failed to retrieve receipts');
         }
     }
 }

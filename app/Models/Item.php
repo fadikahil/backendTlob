@@ -42,7 +42,13 @@ class Item extends Model {
         'expiry_date',
         'expiration_date',
         'expiration_time',
-        'for_a_cause_text'
+        'for_a_cause_text',
+        'item_date',
+        'item_time',
+        'end_timer_option',
+        'audience',
+        'slots',
+        'slots_taken',
     ];
 
     // Relationships
@@ -50,8 +56,7 @@ class Item extends Model {
         return $this->belongsTo(User::class);
     }
 
-    public function category()
-    {
+    public function category() {
         return $this->hasOne(Category::class, 'id', 'category_id');
     }
 
@@ -67,7 +72,7 @@ class Item extends Model {
     }
 
     public function item_custom_field_values() {
-        return $this->hasMany(ItemCustomFieldValue::class,'item_id');
+        return $this->hasMany(ItemCustomFieldValue::class, 'item_id');
     }
 
     public function featured_items() {
@@ -107,15 +112,14 @@ class Item extends Model {
         return !empty($image) ? url(Storage::url($image)) : $image;
     }
 
-    public function getStatusAttribute($value)
-    {
-    if ($this->deleted_at) {
-        return "inactive";
-    }
-    if ($this->expiry_date && $this->expiry_date < Carbon::now()) {
-        return "expired";
-    }
-    return $value;
+    public function getStatusAttribute($value) {
+        if ($this->deleted_at) {
+            return "inactive";
+        }
+        if ($this->expiry_date && $this->expiry_date < Carbon::now()) {
+            return "expired";
+        }
+        return $value;
     }
 
     // Scopes
@@ -147,6 +151,10 @@ class Item extends Model {
         });
     }
 
+    public function user_claims() {
+        return $this->hasMany(UserClaim::class, 'item_id');
+    }
+
     public function scopeOwner($query) {
         if (Auth::user()->hasRole('User')) {
             return $query->where('user_id', Auth::user()->id);
@@ -171,8 +179,7 @@ class Item extends Model {
         return $query->orderBy($column, $order);
     }
 
-    public function scopeFilter($query, $filterObject)
-    {
+    public function scopeFilter($query, $filterObject) {
         if (!empty($filterObject)) {
             foreach ($filterObject as $column => $value) {
                 if ($column == 'status') {
@@ -180,7 +187,7 @@ class Item extends Model {
                         $query->whereNotNull('deleted_at');
                     } elseif ($value == 'expired') {
                         $query->whereNotNull('expiry_date')
-                              ->where('expiry_date', '<', Carbon::now());
+                            ->where('expiry_date', '<', Carbon::now());
                     } else {
                         $query->where((string)$column, (string)$value);
                     }
@@ -191,13 +198,15 @@ class Item extends Model {
         }
         return $query;
     }
+
     public function scopeOnlyNonBlockedUsers($query) {
         $blocked_user_ids = BlockUser::where('user_id', Auth::user()->id)
             ->pluck('blocked_user_id');
         return $query->whereNotIn('user_id', $blocked_user_ids);
     }
+
     public function scopeGetNonExpiredItems($query) {
-        return $query->where(function($query) {
+        return $query->where(function ($query) {
             $query->where('expiry_date', '>', Carbon::now())->orWhereNull('expiry_date');
         });
     }

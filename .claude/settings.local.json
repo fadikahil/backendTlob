@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//c/Users/Saleh/Downloads/Telegram Desktop/**)",
+      "Read(//d/programming/projects/fadi_kahil/tlobni/code/**)",
+      "Read(//c/Users/Saleh/Desktop/**)",
+      "Bash(php:*)",
+      "Read(//d/programming/projects/fadi_kahil/tlobni/resources/tlobni_certificate/**)",
+      "Bash(curl:*)",
+      "Bash(mkdir:*)",
+      "Read(//d/programming/projects/fadi_kahil/tlobni/**)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

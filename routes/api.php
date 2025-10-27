@@ -73,6 +73,13 @@ Route::group(['middleware' => ['auth:sanctum', 'auth.status', 'auth.optional']],
     Route::post('make-user-featured', [ApiController::class, 'makeUserFeatured']);
 
     Route::get('get-item-authenticated', [ApiController::class, 'getItem']);
+    Route::get('get-user-score', [ApiController::class, 'getUserScore']);
+    Route::post('claim-item', [ApiController::class, 'claimItem']);
+    Route::get('private-spaces', [ApiController::class, 'getPrivateSpaces']);
+    Route::get('check-if-claimed', [ApiController::class, 'checkIfClaimed']);
+    Route::get('users-that-claimed-item', [ApiController::class, 'getUsersThatClaimedItem']);
+    Route::post('link-user', [ApiController::class, 'linkUser']);
+    Route::get('user-receipts', [ApiController::class, 'getUserReceipts']);
 });
 
 /* Non Authenticated Routes */

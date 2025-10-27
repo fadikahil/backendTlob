@@ -8,6 +8,7 @@ use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\ResourceCollection;
 use Illuminate\Pagination\AbstractPaginator;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use JsonSerializable;
 use Throwable;
@@ -48,6 +49,7 @@ class ItemCollection extends ResourceCollection {
                     $response[$key]['user'] = $collection->user;
                     $response[$key]['user']['total_reviews'] = $collection->user_total_reviews;
                     $response[$key]['user']['average_rating'] = $collection->user_average_rating;
+                    $response[$key]['user']['score_value'] = $collection->user_score;
                     $response[$key]['user']['is_featured'] = $collection->is_user_featured;
                     $category_ids = explode(',', $collection->user->categories);
                     $categories = Category::whereIn('id', $category_ids)->get();
