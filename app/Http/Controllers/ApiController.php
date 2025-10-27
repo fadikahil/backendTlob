@@ -832,7 +832,8 @@ class ApiController extends Controller
             'posted_since'      => 'nullable|in:all-time,today,within-1-week,within-2-week,within-1-month,within-3-month',
             'rating_from'  => 'nullable|numeric|min:0|max:5',
             'rating_to'    => 'nullable|numeric|min:0|max:5',
-            'organization_id' => 'nullable|exists:users,id'
+            'organization_id' => 'nullable|exists:users,id',
+            'private_spaces_only' => 'nullable|boolean',
         ]);
 
 //        ds($request->all());
@@ -863,9 +864,28 @@ class ApiController extends Controller
                     });
                 })->when($request->having_at_least_one_claim, function ($query) {
                     $query->where('slots_taken', '>', 0);
-                })
-                ->when($request->id, function ($sql) use ($request) {
+                })->when($request->id, function ($sql) use ($request) {
                     $sql->where('id', $request->id);
+                })->when($request->private_spaces_only && $request->my_email, function ($query) use ($request) {
+                    // Get all audience relations for the current user
+                    $relations = UserAudienceRelation::where('user_email', $request->my_email)
+                        ->select('organization_id', 'type')
+                        ->get();
+
+                    // If no relations exist, make sure no results are returned
+                    if ($relations->isEmpty()) {
+                        return $query->whereRaw('1 = 0'); // always false condition
+                    }
+
+                    // Now we build a nested "OR" condition for each (organization_id, type) pair
+                    $query->where(function ($q) use ($relations) {
+                        foreach ($relations as $relation) {
+                            $q->orWhere(function ($sub) use ($relation) {
+                                $sub->where('items.user_id', $relation->organization_id)
+                                    ->where('items.audience', $relation->type);
+                            });
+                        }
+                    });
                 })->when(($request->category_id), function ($sql) use ($request) {
                     if (strpos($request->category_id, ',') !== false) {
                         // Multiple category IDs are provided as comma-separated values
