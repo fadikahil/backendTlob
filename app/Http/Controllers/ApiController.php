@@ -3883,6 +3883,11 @@ class ApiController extends Controller
                         'score' => $user->score_value,
                         'type' => 'impact'
                     ];
+                }else {
+                    $userData['score'] = [
+                        'score' => 0,
+                        'type' => 'impact'
+                    ];
                 }
 
                 // Process categories: Convert comma-separated IDs to names
@@ -3981,6 +3986,11 @@ class ApiController extends Controller
                 $user->score = [
                   'score' => $user->score_value,
                   'type' => 'impact'
+                ];
+            }else {
+                $user->score = [
+                    'score' => 0,
+                    'type' => 'impact'
                 ];
             }
 
@@ -4120,6 +4130,11 @@ class ApiController extends Controller
                 if(isset($user->score_value)) {
                     $user->score = [
                         'score' => $user->score_value,
+                        'type' => 'impact'
+                    ];
+                }else {
+                    $user->score = [
+                        'score' => 0,
                         'type' => 'impact'
                     ];
                 }
