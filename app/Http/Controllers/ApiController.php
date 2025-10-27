@@ -3807,7 +3807,9 @@ class ApiController extends Controller
                     DB::raw('count(featured_users.id) > 0 as is_featured'),
                     DB::raw('SUM(user_scores.score) as score_value')
                 )
-                ->where('user_scores.type', 'impact')
+                ->where(function ($q) {
+                  $q->where('user_scores.type', 'impact')->orWhereNull('user_scores.type');
+                })
                 ->groupBy('users.id')
 //                ->select('users.*')
                 ->whereHas('featured_users', function($query) {
@@ -3876,10 +3878,12 @@ class ApiController extends Controller
                 $userData['featured_users_count'] = count($user->featured_users);
                 $userData['roles'] = $user->roles->pluck('name')->toArray();
                 $userData['items_count'] = $user->items->count();
-                $userData['score'] = [
-                    'score' => $user->score_value,
-                    'type' => 'impact'
-                ];
+                if(isset($user->score_value)) {
+                    $userData['score'] = [
+                        'score' => $user->score_value,
+                        'type' => 'impact'
+                    ];
+                }
 
                 // Process categories: Convert comma-separated IDs to names
                 if (!empty($userData['categories'])) {
@@ -3951,11 +3955,16 @@ class ApiController extends Controller
                 ->leftJoin('featured_users', 'users.id', '=', 'featured_users.user_id')
                 ->leftJoin('user_reviews', 'users.id', '=', 'user_reviews.user_id')
                 ->leftJoin('user_scores', 'users.id', '=', 'user_scores.user_id')
-                ->select('users.*', DB::raw('AVG(user_reviews.ratings) as average_rating, count(user_reviews.id) as total_reviews'), DB::raw('count(featured_users.id) > 0 as is_featured'), DB::raw('SUM(user_scores.score) as score_value'))
+                ->select('users.*', DB::raw('AVG(user_reviews.ratings) as average_rating, count(user_reviews.id) as total_reviews'), DB::raw('count(featured_users.id) > 0 as is_featured')
+                    , DB::raw('SUM(user_scores.score) as score_value')
+                )
                 ->groupBy('users.id')
                 ->whereNotNull('users.type')
                 ->where('users.id', $request->id)
-                ->where('user_scores.type', 'impact')
+                ->where(function ($q) {
+                  $q->where('user_scores.type', 'impact')
+                      ->orWhereNull('user_scores.type');
+                })
                 ->where('status', 1)
                 ->get()
                 ->first();
@@ -3968,10 +3977,12 @@ class ApiController extends Controller
                 $user->categories_array = $categories;
             }
 
-            $user->score = [
-              'score' => $user->score_value,
-              'type' => 'impact'
-            ];
+            if(isset($user->score_value)) {
+                $user->score = [
+                  'score' => $user->score_value,
+                  'type' => 'impact'
+                ];
+            }
 
             return ResponseService::successResponse('Provider fetched successfully', $user);
         }catch (Throwable $th) {
@@ -4012,7 +4023,9 @@ class ApiController extends Controller
                 ->select('users.*', DB::raw('AVG(user_reviews.ratings) as average_rating, count(user_reviews.id) as total_reviews'), DB::raw('count(featured_users.id) > 0 as is_featured'), DB::raw('SUM(user_scores.score) as score_value'))
                 ->groupBy('users.id')
                 ->whereNotNull('users.type')
-                ->where('user_scores.type', 'impact')
+                ->where(function ($q) {
+                  $q->where('user_scores.type', 'impact')->orWhereNull('user_scores.type');
+                })
                 ->when($request->id, function ($query) use ($request) {
                     return $query->where('id', $request->id);
                 })
@@ -4104,10 +4117,12 @@ class ApiController extends Controller
                 $categoriesIds = explode(',', $user->categories);
                 $categories = Category::whereIn('id', $categoriesIds)->get();
                 $user->categories_models = $categories;
-                $user->score = [
-                    'score' => $user->score_value,
-                    'type' => 'impact'
-                ];
+                if(isset($user->score_value)) {
+                    $user->score = [
+                        'score' => $user->score_value,
+                        'type' => 'impact'
+                    ];
+                }
                 return $user;
             });
 
