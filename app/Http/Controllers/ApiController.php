@@ -200,10 +200,12 @@ class ApiController extends Controller
 
             $id = $app_user->id;
 
-            $score = UserScore::where('user_id', $id)->first();
+            $type = $app_user->type === 'Client' ? 'growth' : 'impact';
+
+            $score = UserScore::where('user_id', $id)->where('type', $type)->first();
             return ResponseService::successResponse("Data Fetched Successfully", [
                 'score' => $score == null ? 0 : $score->score,
-                'type' => $app_user->type === 'Client' ? 'growth' : 'impact'
+                'type' => $type
             ]);
         }catch (Throwable $th) {
             ResponseService::logErrorResponse($th, "API Controller -> getUserScore");
@@ -801,7 +803,7 @@ class ApiController extends Controller
 
             $item_id = $request->item_id;
 
-            $users = DB::table('users')
+            $users = User::select('*')
                 ->join('user_claims', 'users.id', '=', 'user_claims.user_id')
                 ->where('user_claims.item_id', $item_id)
                 ->select('users.*')
@@ -833,7 +835,7 @@ class ApiController extends Controller
             'rating_from'  => 'nullable|numeric|min:0|max:5',
             'rating_to'    => 'nullable|numeric|min:0|max:5',
             'organization_id' => 'nullable|exists:users,id',
-            'private_spaces_only' => 'nullable|boolean',
+            'private_spaces_only' => 'nullable',
         ]);
 
 //        ds($request->all());
@@ -860,13 +862,43 @@ class ApiController extends Controller
                 ->where('provider_item_type', 'experience') //todo only temporarily (if you want services remove this line
                 ->when($request->claimed_by_me && $request->my_id, function ($query) use ($request) {
                     $query->whereHas('user_claims', function ($subQuery) use ($request) {
-                        $subQuery->where('user_id', $request->my_id);
+                        $subQuery->where('user_claims.user_id', $request->my_id);
                     });
                 })->when($request->having_at_least_one_claim, function ($query) {
                     $query->where('slots_taken', '>', 0);
                 })->when($request->id, function ($sql) use ($request) {
                     $sql->where('id', $request->id);
-                })->when($request->private_spaces_only && $request->my_email, function ($query) use ($request) {
+                })
+                ->when($request->my_email, function ($query) use ($request) {
+                    // Get all audience relations for the current user
+                    $relations = UserAudienceRelation::where('user_email', $request->my_email)
+                        ->select('organization_id', 'type')
+                        ->get();
+
+                    $query->where(function ($outer) use ($relations) {
+                        // Always include public items
+                        $outer->where('items.audience', 'public');
+
+                        // If there are relations, include matching ones as well
+                        if ($relations->isNotEmpty()) {
+                            $outer->orWhere(function ($q) use ($relations) {
+                                foreach ($relations as $relation) {
+                                    $q->orWhere(function ($sub) use ($relation) {
+                                        $sub->where('items.user_id', $relation->organization_id)
+                                            ->where('items.audience', $relation->type);
+                                    });
+                                }
+                            });
+                        }
+                    });
+
+                    return $query;
+                }, function ($query) {
+                    // When no my_email provided: only public
+                    $query->where('items.audience', 'public');
+                    return $query;
+                })
+                ->when($request->private_spaces_only && $request->my_email, function ($query) use ($request) {
                     // Get all audience relations for the current user
                     $relations = UserAudienceRelation::where('user_email', $request->my_email)
                         ->select('organization_id', 'type')
@@ -886,7 +918,8 @@ class ApiController extends Controller
                             });
                         }
                     });
-                })->when(($request->category_id), function ($sql) use ($request) {
+                })
+                ->when(($request->category_id), function ($sql) use ($request) {
                     if (strpos($request->category_id, ',') !== false) {
                         // Multiple category IDs are provided as comma-separated values
                         $categoryIds = explode(',', $request->category_id);
@@ -3850,6 +3883,8 @@ class ApiController extends Controller
                 });
                 Log::info('Filtering by Business and Expert roles');
             }
+
+
             // Apply pagination
             $total = $sql->count();
             Log::info('Found ' . $total . ' featured users');
@@ -3860,6 +3895,8 @@ class ApiController extends Controller
                 ->get();
 
             $users->load('scores');
+
+
 
             Log::info('Retrieved ' . count($users) . ' featured users after pagination');
 
@@ -3945,6 +3982,8 @@ class ApiController extends Controller
             }
 
             Log::info('Processed ' . count($processedUsers) . ' users with additional fields');
+
+            Log::info('Processed', $processedUsers);
 
             // Return the data directly instead of using the UserCollection resource
             return ResponseService::successResponse('Featured users fetched successfully', [
