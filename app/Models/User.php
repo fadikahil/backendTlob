@@ -83,6 +83,10 @@ class User extends Authenticatable
         return $image;
     }
 
+    public function scores() {
+        return $this->hasMany(UserScore::class, 'user_id','id');
+    }
+
     public function items()
     {
         return $this->hasMany(Item::class);

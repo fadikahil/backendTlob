@@ -3796,20 +3796,15 @@ class ApiController extends Controller
             $sql = User::with([
                     'items',
                     'featured_users',
-                    'roles'
+                    'roles',
                 ])
                 ->leftJoin('featured_users', 'users.id', '=', 'featured_users.user_id')
                 ->leftJoin('user_reviews', 'users.id', '=', 'user_reviews.user_id')
-                ->leftJoin('user_scores', 'users.id', '=', 'user_scores.user_id')
                 ->select('users.*',
                     DB::raw('AVG(user_reviews.ratings) as average_rating'),
                     DB::raw('COUNT(user_reviews.id) as total_reviews'),
-                    DB::raw('count(featured_users.id) > 0 as is_featured'),
-                    DB::raw('SUM(user_scores.score) as score_value')
+                    DB::raw('count(featured_users.id) > 0 as is_featured')
                 )
-                ->where(function ($q) {
-                  $q->where('user_scores.type', 'impact')->orWhereNull('user_scores.type');
-                })
                 ->groupBy('users.id')
 //                ->select('users.*')
                 ->whereHas('featured_users', function($query) {
@@ -3835,8 +3830,6 @@ class ApiController extends Controller
                 });
                 Log::info('Filtering by Business and Expert roles');
             }
-            ds($sql->toSql());
-
             // Apply pagination
             $total = $sql->count();
             Log::info('Found ' . $total . ' featured users');
@@ -3845,6 +3838,8 @@ class ApiController extends Controller
             $users = $sql->skip($request->offset ?? 0)
                 ->take($request->limit ?? 10)
                 ->get();
+
+            $users->load('scores');
 
             Log::info('Retrieved ' . count($users) . ' featured users after pagination');
 
@@ -3878,15 +3873,13 @@ class ApiController extends Controller
                 $userData['featured_users_count'] = count($user->featured_users);
                 $userData['roles'] = $user->roles->pluck('name')->toArray();
                 $userData['items_count'] = $user->items->count();
-                if(isset($user->score_value)) {
-                    $userData['score'] = [
-                        'score' => $user->score_value,
-                        'type' => 'impact'
-                    ];
+                $score_type = $user->type === 'Client' ? 'growth' : 'impact';
+                if(isset($user->scores)) {
+                    $userData['score'] = $user->scores->where('type', $score_type)->first() ?? ['score' => 0, 'type' => $score_type];
                 }else {
                     $userData['score'] = [
                         'score' => 0,
-                        'type' => 'impact'
+                        'type' => $score_type
                     ];
                 }
 
@@ -3959,20 +3952,15 @@ class ApiController extends Controller
             $user = User::with(['roles:id,name'])
                 ->leftJoin('featured_users', 'users.id', '=', 'featured_users.user_id')
                 ->leftJoin('user_reviews', 'users.id', '=', 'user_reviews.user_id')
-                ->leftJoin('user_scores', 'users.id', '=', 'user_scores.user_id')
-                ->select('users.*', DB::raw('AVG(user_reviews.ratings) as average_rating, count(user_reviews.id) as total_reviews'), DB::raw('count(featured_users.id) > 0 as is_featured')
-                    , DB::raw('SUM(user_scores.score) as score_value')
-                )
+                ->select('users.*', DB::raw('AVG(user_reviews.ratings) as average_rating, count(user_reviews.id) as total_reviews'), DB::raw('count(featured_users.id) > 0 as is_featured'))
                 ->groupBy('users.id')
                 ->whereNotNull('users.type')
                 ->where('users.id', $request->id)
-                ->where(function ($q) {
-                  $q->where('user_scores.type', 'impact')
-                      ->orWhereNull('user_scores.type');
-                })
                 ->where('status', 1)
                 ->get()
                 ->first();
+
+            $user->load('scores');
 
             if(isset($user->categories)) {
                 $categoriesIds = explode(',', $user->categories);
@@ -3982,15 +3970,13 @@ class ApiController extends Controller
                 $user->categories_array = $categories;
             }
 
-            if(isset($user->score_value)) {
-                $user->score = [
-                  'score' => $user->score_value,
-                  'type' => 'impact'
-                ];
-            }else {
+            $score_type = $user->type === 'Client' ? 'growth' : 'impact';
+            if(isset($user->scores)) {
+                $user->score = $user->scores->where('type', $score_type)->first() ?? ['score' => 0, 'type' => $score_type];
+            }else if($user !== null) {
                 $user->score = [
                     'score' => 0,
-                    'type' => 'impact'
+                    'type' => $score_type
                 ];
             }
 
@@ -4029,13 +4015,9 @@ class ApiController extends Controller
             $query = User::with(['roles:id,name'])
                 ->leftJoin('featured_users', 'users.id', '=', 'featured_users.user_id')
                 ->leftJoin('user_reviews', 'users.id', '=', 'user_reviews.user_id')
-                ->leftJoin('user_scores', 'users.id', '=', 'user_scores.user_id')
-                ->select('users.*', DB::raw('AVG(user_reviews.ratings) as average_rating, count(user_reviews.id) as total_reviews'), DB::raw('count(featured_users.id) > 0 as is_featured'), DB::raw('SUM(user_scores.score) as score_value'))
+                ->select('users.*', DB::raw('AVG(user_reviews.ratings) as average_rating, count(user_reviews.id) as total_reviews'), DB::raw('count(featured_users.id) > 0 as is_featured'))
                 ->groupBy('users.id')
                 ->whereNotNull('users.type')
-                ->where(function ($q) {
-                  $q->where('user_scores.type', 'impact')->orWhereNull('user_scores.type');
-                })
                 ->when($request->id, function ($query) use ($request) {
                     return $query->where('id', $request->id);
                 })
@@ -4123,19 +4105,19 @@ class ApiController extends Controller
             // Only get active users
             $query->where('status', 1);
 
-            $result = $query->paginate($request->limit ?? 15)->through(function ($user) {
+            $paginated = $query->paginate($request->limit ?? 15);
+            $paginated->load('scores');
+            $result = $paginated->through(function ($user) {
                 $categoriesIds = explode(',', $user->categories);
                 $categories = Category::whereIn('id', $categoriesIds)->get();
                 $user->categories_models = $categories;
-                if(isset($user->score_value)) {
-                    $user->score = [
-                        'score' => $user->score_value,
-                        'type' => 'impact'
-                    ];
-                }else {
+                $score_type = $user->type === 'Client' ? 'growth' : 'impact';
+                if(isset($user->scores)) {
+                    $user->score = $user->scores->where('type', $score_type)->first() ?? ['score' => 0, 'type' => $score_type];
+                }else if($user !== null) {
                     $user->score = [
                         'score' => 0,
-                        'type' => 'impact'
+                        'type' => $score_type
                     ];
                 }
                 return $user;
