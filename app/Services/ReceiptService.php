@@ -105,7 +105,12 @@ class ReceiptService
         // User name - positioned directly under "THIS OPPORTUNITY IS UNLOCKED ON TLOBNI BY:"
         imagettftext($image, 45, 0, 180, 690, $navyBlueColor, $fontBold, $userName);
 
-        // Item title - positioned below user name (may wrap to multiple lines)
+        // Item title - positioned below user name (truncated to 30 chars max)
+        // Truncate item title to 30 characters with ellipsis if longer
+        if (mb_strlen($itemTitle) > 30) {
+            $itemTitle = mb_substr($itemTitle, 0, 30) . '...';
+        }
+
         $wrappedTitle = self::wrapTextForTTF($itemTitle, 22, $fontBold, 1200);
         $titleY = 870;
         $wrappedTitle = [$wrappedTitle[0]];
