@@ -870,6 +870,9 @@ class ApiController extends Controller
                     $sql->where('id', $request->id);
                 })
                 ->when($request->my_email, function ($query) use ($request) {
+                    if(isset($request->my_id) && isset($request->user_id) && $request->my_id === $request->user_id) {
+                        return $query;
+                    }
                     // Get all audience relations for the current user
                     $relations = UserAudienceRelation::where('user_email', $request->my_email)
                         ->select('organization_id', 'type')
