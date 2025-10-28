@@ -817,6 +817,11 @@ class ApiController extends Controller
     }
 
     public function getItem(Request $request) {
+
+        $currentURI = explode('?', $request->getRequestUri(), 2);
+
+        $is_my_items_request = $currentURI[0] == "/api/my-items";
+
         Log::info('getItem request received: ' . json_encode($request->all()));
         $validator = Validator::make($request->all(), [
             'limit'             => 'nullable|integer',
@@ -869,8 +874,8 @@ class ApiController extends Controller
                 })->when($request->id, function ($sql) use ($request) {
                     $sql->where('id', $request->id);
                 })
-                ->when($request->my_email, function ($query) use ($request) {
-                    if(isset($request->my_id) && isset($request->user_id) && $request->my_id === $request->user_id) {
+                ->when($request->my_email || $is_my_items_request, function ($query) use ($request, $is_my_items_request) {
+                    if($is_my_items_request) {
                         return $query;
                     }
                     // Get all audience relations for the current user
@@ -1195,9 +1200,7 @@ class ApiController extends Controller
                     $q->where('user_id', Auth::user()->id);
                 }]);
 
-                $currentURI = explode('?', $request->getRequestUri(), 2);
-
-                if ($currentURI[0] == "/api/my-items") { //TODO: This if condition is temporary fix. Need something better
+                if ($is_my_items_request) { //TODO: This if condition is temporary fix. Need something better
                     $sql->where(['items.user_id' => Auth::user()->id])->withTrashed();
                 } else {
                     $sql->where('status', 'approved')->has('user')->onlyNonBlockedUsers();
