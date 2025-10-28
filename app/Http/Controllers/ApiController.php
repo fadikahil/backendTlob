@@ -897,8 +897,7 @@ class ApiController extends Controller
                     // When no my_email provided: only public
                     $query->where('items.audience', 'public');
                     return $query;
-                })
-                ->when($request->private_spaces_only && $request->my_email, function ($query) use ($request) {
+                })->when($request->private_spaces_only && $request->my_email, function ($query) use ($request) {
                     // Get all audience relations for the current user
                     $relations = UserAudienceRelation::where('user_email', $request->my_email)
                         ->select('organization_id', 'type')
@@ -918,8 +917,9 @@ class ApiController extends Controller
                             });
                         }
                     });
-                })
-                ->when(($request->category_id), function ($sql) use ($request) {
+                })->when($request->private_spaces_only && !$request->my_email, function($query) {
+                    return $query->whereRaw('1 = 0');
+                })->when(($request->category_id), function ($sql) use ($request) {
                     if (strpos($request->category_id, ',') !== false) {
                         // Multiple category IDs are provided as comma-separated values
                         $categoryIds = explode(',', $request->category_id);
