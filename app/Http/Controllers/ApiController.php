@@ -856,8 +856,7 @@ class ApiController extends Controller
                 ->addSelect(
                     DB::raw('AVG(user_reviews.ratings) as user_average_rating'),
                     DB::raw('COUNT(user_reviews.id) as user_total_reviews'),
-                    DB::raw('COUNT(featured_users.id) > 0 as is_user_featured')
-                    ,
+                    DB::raw('COUNT(featured_users.id) > 0 as is_user_featured'),
                     DB::raw('(select SUM(u_score.score) from user_scores u_score where u_score.user_id = items.user_id and type = \'impact\') as user_score')
                 )
                 ->leftJoin('user_reviews', 'items.user_id', '=', 'user_reviews.user_id')
@@ -874,8 +873,8 @@ class ApiController extends Controller
                 })->when($request->id, function ($sql) use ($request) {
                     $sql->where('id', $request->id);
                 })
-                ->when($request->my_email || $is_my_items_request, function ($query) use ($request, $is_my_items_request) {
-                    if($is_my_items_request) {
+                ->when($request->my_email || ($is_my_items_request || (isset($request->my_id) && isset($request->user_id) && $request->user_id === $request->my_id)), function ($query) use ($request, $is_my_items_request) {
+                    if($is_my_items_request || $request->user_id === $request->my_id) {
                         return $query;
                     }
                     // Get all audience relations for the current user
